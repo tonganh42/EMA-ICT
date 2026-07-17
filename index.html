@@ -1031,6 +1031,20 @@ function findLiquidityZones(klines, lookback=ICT_LOOKBACK, tolPct=0.12){
   return { eqHighs, eqLows };
 }
 
+// ATR (Average True Range) — dùng làm cơ sở đặt buffer cho SL thay vì % cố định của giá,
+// vì ATR phản ánh đúng biến động thực tế của thị trường ở khung entry tại thời điểm đó.
+function calcATR(klines, period=14){
+  if (!klines || klines.length < period+1) return null;
+  const trs = [];
+  for (let i=1;i<klines.length;i++){
+    const high = parseFloat(klines[i][2]), low = parseFloat(klines[i][3]);
+    const prevClose = parseFloat(klines[i-1][4]);
+    trs.push(Math.max(high-low, Math.abs(high-prevClose), Math.abs(low-prevClose)));
+  }
+  const lastTRs = trs.slice(-period);
+  return lastTRs.reduce((a,b)=>a+b,0)/lastTRs.length;
+}
+
 function premiumDiscount(klines, lookback=SWING_LOOKBACK){
   const slice = klines.slice(-lookback);
   const highs = slice.map(k=>parseFloat(k[2]));
@@ -1069,8 +1083,10 @@ function analyzeTF_ICT(klines){
   const lastNy = nyPartsFromMs(parseFloat(klines[klines.length-1][0]));
   const lastSession = getSessionForMinuteOfDay(lastNy.minuteOfDay);
 
+  const atr14 = calcATR(klines, 14);
+
   return { trend, lastEvent, events, bullOB, bearOB, fvgs, volumeImbalances, liquidity, pd,
-    recentSwings, lastClose, breaker, mitigation, silverBulletFVGs, lastSession };
+    recentSwings, lastClose, breaker, mitigation, silverBulletFVGs, lastSession, atr14 };
 }
 
 function trendLabelICT(t){
@@ -1111,9 +1127,25 @@ function buildICTEntryNote(direction, entryTF, entryA, biggerTF, biggerA){
 // Chỉ đưa ra gợi ý LỆNH THỰC SỰ (Entry/SL/TP) khi hội đủ điều kiện:
 //  1) Có vùng OB hoặc FVG entry ở khung nhỏ nhất VÀ hình thành TRONG phiên/Killzone (không phải Low Probability).
 //  2) Cấu trúc gần nhất là MSS hoặc BOS đúng hướng lệnh (không phải Liquidity Sweep — vì sweep chưa xác nhận gì).
-//  3) Tỷ lệ RR (Reward:Risk) đạt tối thiểu 2:1, TP ưu tiên nhắm vào thanh khoản đối diện ở khung lớn hơn.
-// Nếu không hội đủ, KHÔNG đưa ra Entry/SL/TP — chỉ giải thích lý do để tránh gợi ý lệnh ngoài giờ/kém xác suất.
-function buildTradeSetup(direction, entryTF, entryA, biggerTF, biggerA){
+//  3) Tỷ lệ RR (Reward:Risk) đạt tối thiểu 1:1. TP1 ưu tiên thanh khoản CHƯA bị quét gần nhất ở khung entry/khung
+//     giữa (thực tế, khả thi hơn); TP2 nhắm thanh khoản chưa quét xa hơn ở khung lớn nhất — khi giá đạt TP1,
+//     dịch SL về entry (breakeven) và gồng phần còn lại tới TP2.
+// LƯU Ý QUAN TRỌNG: khi entry là lệnh CHỜ (Order Block/FVG nằm cách xa giá hiện tại), phần "Reward" hiển thị
+// bao gồm CẢ đoạn giá phải hồi về entry (chưa xảy ra) LẪN đoạn tiếp diễn sau đó — RR vì vậy có thể trông rất lớn
+// dù không phản ánh xác suất thắng thực tế. Khi RR vượt ngưỡng bất thường, hệ thống gắn cờ cảnh báo rrWarning.
+// Nếu không hội đủ điều kiện, KHÔNG đưa ra Entry/SL/TP — chỉ giải thích lý do để tránh gợi ý lệnh ngoài giờ/kém xác suất.
+const MIN_RR = 1;            // RR tối thiểu chấp nhận cho TP1
+const ATR_SL_MULT = 0.35;    // hệ số nhân ATR cho buffer SL (khuyến nghị ICT: 0.25 - 0.5x ATR khung entry)
+const SL_MIN_PCT = 0.0015;   // sàn buffer tối thiểu = 0.15% giá, tránh SL quá sát khi ATR/zone quá nhỏ
+const RR_WARN_THRESHOLD = 10; // RR vượt mức này => cảnh báo bất thường, không nên tin tuyệt đối vào con số
+
+function nearestUnswept(zones, entry, isUp){
+  return zones.filter(z=>!z.swept && (isUp ? z.price>entry : z.price<entry))
+    .map(z=>z.price)
+    .sort((a,b)=> isUp ? a-b : b-a);
+}
+
+function buildTradeSetup(direction, entryTF, entryA, midA, biggerA){
   const isUp = direction === 'up';
   const ob = isUp ? entryA.bullOB : entryA.bearOB;
   const fvg = entryA.fvgs.find(f => f.type === (isUp ? 'bullish' : 'bearish'));
@@ -1128,35 +1160,52 @@ function buildTradeSetup(direction, entryTF, entryA, biggerTF, biggerA){
     return { ok:false, reason:'no_structure_confirm' };
   }
 
+  // SL = đỉnh/đáy wick (điểm vô hiệu hóa cấu trúc OB/FVG) ± buffer theo ATR khung entry,
+  // có sàn tối thiểu theo % giá để tránh SL quá sát khi ATR hoặc zone quá nhỏ (dễ bị quét bởi nhiễu giá).
   const zoneHeight = Math.abs(primary.top - primary.bottom);
-  const buffer = Math.max(zoneHeight*0.15, entryA.lastClose*0.0008);
+  const atrBuffer = entryA.atr14 ? entryA.atr14*ATR_SL_MULT : zoneHeight*0.15;
+  const buffer = Math.max(atrBuffer, entryA.lastClose*SL_MIN_PCT);
 
   let entry, sl;
   if (isUp){ entry = primary.top; sl = primary.bottom - buffer; }
   else { entry = primary.bottom; sl = primary.top + buffer; }
 
-  let tp;
-  if (isUp){
-    const targets = biggerA.liquidity.eqHighs.map(z=>z.price).filter(p=>p>entry).sort((a,b)=>a-b);
-    tp = targets.length ? targets[0] : biggerA.pd.top;
-    if (tp <= entry) tp = biggerA.pd.top;
-  } else {
-    const targets = biggerA.liquidity.eqLows.map(z=>z.price).filter(p=>p<entry).sort((a,b)=>b-a);
-    tp = targets.length ? targets[0] : biggerA.pd.bottom;
-    if (tp >= entry) tp = biggerA.pd.bottom;
-  }
+  // TP1: thanh khoản CHƯA quét gần nhất, ưu tiên khung entry rồi khung giữa (thực tế, khả thi hơn).
+  // TP2: thanh khoản CHƯA quét xa hơn (khung giữa/khung lớn) — mục tiêu "gồng lãi" sau khi dời SL về breakeven.
+  const nearZones = isUp
+    ? [...nearestUnswept(entryA.liquidity.eqHighs, entry, true), ...nearestUnswept(midA.liquidity.eqHighs, entry, true)]
+    : [...nearestUnswept(entryA.liquidity.eqLows, entry, false), ...nearestUnswept(midA.liquidity.eqLows, entry, false)];
+  const farZones = nearestUnswept(isUp ? biggerA.liquidity.eqHighs : biggerA.liquidity.eqLows, entry, isUp);
+
+  let tp = nearZones.length ? nearZones[0] : (isUp ? midA.pd.top : midA.pd.bottom);
+  if (isUp && tp<=entry) tp = biggerA.pd.top;
+  if (!isUp && tp>=entry) tp = biggerA.pd.bottom;
+
+  let tp2Candidates = [...nearZones, ...farZones].filter(p => isUp ? p>tp : p<tp);
+  tp2Candidates = tp2Candidates.sort((a,b)=> isUp ? a-b : b-a);
+  let tp2 = tp2Candidates.length ? tp2Candidates[0] : (isUp ? biggerA.pd.top : biggerA.pd.bottom);
+  if (isUp && tp2<=tp) tp2 = biggerA.pd.top;
+  if (!isUp && tp2>=tp) tp2 = biggerA.pd.bottom;
 
   const risk = Math.abs(entry-sl);
   if (risk <= 0) return { ok:false, reason:'invalid_risk' };
   let reward = Math.abs(tp-entry);
   let rr = reward/risk;
 
-  if (rr < 2){
+  if (rr < MIN_RR){
     tp = isUp ? Math.max(tp, biggerA.pd.top) : Math.min(tp, biggerA.pd.bottom);
     reward = Math.abs(tp-entry);
     rr = reward/risk;
+    // TP2 phải luôn xa hơn TP1 sau khi TP1 được nới ra theo pd bound
+    tp2 = isUp ? Math.max(tp2, tp) : Math.min(tp2, tp);
   }
-  if (rr < 2) return { ok:false, reason:'rr_below_2' };
+  if (rr < MIN_RR) return { ok:false, reason:'rr_below_min' };
+
+  const reward2 = Math.abs(tp2-entry);
+  const rr2 = reward2/risk;
+  const rrWarning = rr > RR_WARN_THRESHOLD;
+  // % khoảng cách giá phải di chuyển để chạm entry (áp dụng khi entry là lệnh chờ, nằm xa giá hiện tại)
+  const pullbackPct = Math.abs(entry-entryA.lastClose)/entryA.lastClose*100;
 
   // Điểm hợp lưu ước tính (heuristic dựa trên số điều kiện ICT thỏa mãn — KHÔNG phải xác suất
   // thắng thống kê thực tế, không hồi kiểm dữ liệu lịch sử). Dùng để xếp hạng độ tin cậy tương đối.
@@ -1167,21 +1216,21 @@ function buildTradeSetup(direction, entryTF, entryA, biggerTF, biggerA){
   if (primary.sessionLabel) score += 5;
   const sweptOppositeSide = isUp ? biggerA.liquidity.eqLows.some(z=>z.swept) : biggerA.liquidity.eqHighs.some(z=>z.swept);
   if (sweptOppositeSide) score += 10;
-  if (rr >= 3) score += 5;
+  if (rr >= 3 && !rrWarning) score += 5;
   score = Math.min(88, score);
 
-  return { ok:true, direction, source, entry, sl, tp, risk, reward, rr, score, primary, event:ev };
+  return { ok:true, direction, source, entry, sl, tp, tp2, risk, reward, rr, reward2, rr2, rrWarning, pullbackPct, score, primary, event:ev };
 }
 
 const NO_TRADE_REASONS = {
   no_zone_in_session: 'Chưa có Order Block/FVG entry nào hình thành trong phiên/Killzone hiện tại ở khung nhỏ nhất — mọi vùng hiện có đều ❌ Ngoài phiên giao dịch (Low Probability).',
   no_structure_confirm: 'Cấu trúc gần nhất chỉ là Liquidity Sweep (quét thanh khoản) hoặc chưa cùng hướng — chưa có MSS/BOS xác nhận thật sự.',
-  rr_below_2: 'Có vùng entry hợp lệ nhưng khoảng cách tới thanh khoản mục tiêu không đủ để đạt tỷ lệ RR tối thiểu 2:1.',
+  rr_below_min: `Có vùng entry hợp lệ nhưng khoảng cách tới thanh khoản mục tiêu không đủ để đạt tỷ lệ RR tối thiểu ${MIN_RR}:1.`,
   invalid_risk: 'Không xác định được vùng SL hợp lệ (vùng entry quá hẹp/không rõ ràng).',
   mixed_trend: 'Cấu trúc giữa các khung đang mâu thuẫn — chưa đủ điều kiện đồng thuận để vào lệnh.'
 };
 
-function buildTradeHtml(setup){
+function buildTradeHtml(setup, entryTF){
   if (!setup || !setup.ok){
     const reason = setup ? NO_TRADE_REASONS[setup.reason] : NO_TRADE_REASONS.mixed_trend;
     return `
@@ -1193,14 +1242,23 @@ function buildTradeHtml(setup){
   const isUp = setup.direction === 'up';
   const dirLabel = isUp ? 'LONG (MUA)' : 'SHORT (BÁN)';
   const dirCls = isUp ? 'long' : 'short';
+  const pullbackNote = setup.pullbackPct >= 0.5
+    ? `<div class="trade-meta">⚠️ Entry là lệnh CHỜ, cách giá hiện tại ~<b>${setup.pullbackPct.toFixed(2)}%</b> — giá cần hồi về vùng này trước khi lệnh khớp. Phần "Reward" trong RR bên dưới bao gồm cả quãng hồi giá này (chưa xảy ra), không chỉ là lợi nhuận thuần sau khi khớp lệnh.</div>`
+    : '';
+  const rrWarningNote = setup.rrWarning
+    ? `<div class="trade-meta warn">🚩 RR đang ở mức bất thường cao (>${RR_WARN_THRESHOLD}:1) — thường do SL cấu trúc quá sát và/hoặc entry cách xa giá hiện tại. Đây KHÔNG phải xác suất thắng, tuyệt đối không tăng khối lượng vào lệnh chỉ vì con số RR lớn.</div>`
+    : '';
   return `
     <div class="trade-box ${dirCls}">
       <div class="stitle">Gợi ý lệnh (Entry / TP / SL)</div>
       <div class="trade-header ${dirCls}">✅ ${dirLabel} — nguồn: ${setup.source}${setup.primary.silverBullet?` (🎯 ${setup.primary.silverBullet})`:''}</div>
       <div class="trade-line entry"><span class="tl-label">Entry</span><span class="tl-value">${fmtNum(setup.entry)}</span></div>
-      <div class="trade-line tp"><span class="tl-label">TP (~${setup.score}% hợp lưu)</span><span class="tl-value">${fmtNum(setup.tp)}</span></div>
+      <div class="trade-line tp"><span class="tl-label">TP1 (~${setup.score}% hợp lưu)</span><span class="tl-value">${fmtNum(setup.tp)}</span></div>
+      <div class="trade-line tp"><span class="tl-label">TP2 (thanh khoản xa hơn)</span><span class="tl-value">${fmtNum(setup.tp2)}</span></div>
       <div class="trade-line sl"><span class="tl-label">SL</span><span class="tl-value">${fmtNum(setup.sl)}</span></div>
-      <div class="trade-meta">Tỷ lệ RR ≈ <b>1 : ${setup.rr.toFixed(2)}</b> (tối thiểu 2:1). ${setup.event.type==='MSS'?'Xác nhận bằng MSS (đảo chiều hợp lệ, có FVG kèm theo).':'Xác nhận bằng BOS (tiếp diễn xu hướng).'} % hợp lưu là điểm ước tính dựa trên số điều kiện ICT thỏa mãn (phiên, MSS, Silver Bullet, sweep đối ứng...), <b>không phải xác suất thắng thống kê thực tế</b> — luôn tự quản trị rủi ro.</div>
+      <div class="trade-meta">RR TP1 ≈ <b>1 : ${setup.rr.toFixed(2)}</b> (tối thiểu ${MIN_RR}:1) — RR TP2 ≈ <b>1 : ${setup.rr2.toFixed(2)}</b>. Gợi ý quản trị: khi giá đạt TP1, dời SL về Entry (breakeven) rồi gồng phần vị thế còn lại hướng tới TP2. SL đặt tại đỉnh/đáy wick vô hiệu hóa vùng ${setup.source} ± buffer ~${ATR_SL_MULT}×ATR (sàn tối thiểu ${(SL_MIN_PCT*100).toFixed(2)}% giá) khung ${entryTF.label}. ${setup.event.type==='MSS'?'Xác nhận bằng MSS (đảo chiều hợp lệ, có FVG kèm theo).':'Xác nhận bằng BOS (tiếp diễn xu hướng).'} % hợp lưu là điểm ước tính dựa trên số điều kiện ICT thỏa mãn (phiên, MSS, Silver Bullet, sweep đối ứng...), <b>không phải xác suất thắng thống kê thực tế</b> — luôn tự quản trị rủi ro.</div>
+      ${pullbackNote}
+      ${rrWarningNote}
     </div>`;
 }
 
@@ -1247,19 +1305,21 @@ function renderICT(results, tfs, dailyOpenInfo){
   const upCount = trends.filter(t=>t==="up").length;
   const downCount = trends.filter(t=>t==="down").length;
 
-  // Khung nhỏ nhất dùng để tìm điểm entry (OB/FVG), khung lớn nhất dùng để xác định vùng Premium/Discount
+  // Khung nhỏ nhất dùng để tìm điểm entry (OB/FVG), khung giữa hỗ trợ tìm TP1 gần thực tế,
+  // khung lớn nhất dùng để xác định vùng Premium/Discount và TP2 (thanh khoản xa hơn).
   const entryTF = tfs[tfs.length-1], entryA = results[results.length-1].analysis;
+  const midTF = tfs[1], midA = results[1].analysis;
   const biggerTF = tfs[0], biggerA = results[0].analysis;
 
   let confClass, verdictClass, verdictText, note, tradeSetup;
   if (upCount === trends.length){
     confClass="bull"; verdictClass="up"; verdictText="CẤU TRÚC ĐỒNG THUẬN TĂNG TRÊN CẢ 3 KHUNG";
     note="Cấu trúc thẳng hàng theo hướng tăng trên cả 3 khung (xác nhận bằng MSS/BOS thật, không phải Liquidity Sweep) — điều kiện thuận lợi hơn cho lệnh mua theo xu hướng. " + buildICTEntryNote('up', entryTF, entryA, biggerTF, biggerA);
-    tradeSetup = buildTradeSetup('up', entryTF, entryA, biggerTF, biggerA);
+    tradeSetup = buildTradeSetup('up', entryTF, entryA, midA, biggerA);
   } else if (downCount === trends.length){
     confClass="bear"; verdictClass="down"; verdictText="CẤU TRÚC ĐỒNG THUẬN GIẢM TRÊN CẢ 3 KHUNG";
     note="Cấu trúc thẳng hàng theo hướng giảm trên cả 3 khung (xác nhận bằng MSS/BOS thật, không phải Liquidity Sweep) — điều kiện thuận lợi hơn cho lệnh bán theo xu hướng. " + buildICTEntryNote('down', entryTF, entryA, biggerTF, biggerA);
-    tradeSetup = buildTradeSetup('down', entryTF, entryA, biggerTF, biggerA);
+    tradeSetup = buildTradeSetup('down', entryTF, entryA, midA, biggerA);
   } else {
     confClass="mixed"; verdictClass="flat"; verdictText="CẤU TRÚC MÂU THUẪN GIỮA CÁC KHUNG";
     note="Khung lớn và khung nhỏ chưa đồng thuận xu hướng — rủi ro tín hiệu giả cao, nên chờ MSS (phá cấu trúc kèm FVG) xác nhận rõ ràng hơn trước khi vào lệnh, và tránh nhầm Liquidity Sweep với đảo chiều thật.";
@@ -1272,7 +1332,7 @@ function renderICT(results, tfs, dailyOpenInfo){
       <div class="verdict ${verdictClass}">${verdictText}</div>
       <div class="note">${note}</div>
     </div>
-    ${buildTradeHtml(tradeSetup)}
+    ${buildTradeHtml(tradeSetup, entryTF)}
     ${buildPO3Html(dailyOpenInfo, entryA.lastClose)}`;
 
   const cardsHtml = results.map(r=>{
@@ -1369,9 +1429,12 @@ function buildAnalysisTextICT(){
     lines.push("");
     lines.push(`>>> GỢI Ý LỆNH: ${ts.direction==='up'?'LONG (MUA)':'SHORT (BÁN)'} — nguồn: ${ts.source}${ts.primary.silverBullet?` (${ts.primary.silverBullet})`:''}`);
     lines.push(`Entry: ${fmtNum(ts.entry)}`);
-    lines.push(`TP: ${fmtNum(ts.tp)} (~${ts.score}% hợp lưu)`);
-    lines.push(`SL: ${fmtNum(ts.sl)}`);
-    lines.push(`RR: 1 : ${ts.rr.toFixed(2)} (tối thiểu 2:1)`);
+    lines.push(`TP1: ${fmtNum(ts.tp)} (~${ts.score}% hợp lưu) — RR 1:${ts.rr.toFixed(2)} (tối thiểu ${MIN_RR}:1)`);
+    lines.push(`TP2: ${fmtNum(ts.tp2)} (thanh khoản xa hơn) — RR 1:${ts.rr2.toFixed(2)}`);
+    lines.push(`SL: ${fmtNum(ts.sl)} (đặt tại đỉnh/đáy vô hiệu hóa ± ${ATR_SL_MULT}×ATR, sàn tối thiểu ${(SL_MIN_PCT*100).toFixed(2)}% giá)`);
+    lines.push(`Quản trị: đạt TP1 → dời SL về Entry (breakeven), gồng phần còn lại tới TP2.`);
+    if (ts.pullbackPct >= 0.5) lines.push(`⚠️ Entry cách giá hiện tại ~${ts.pullbackPct.toFixed(2)}% (lệnh chờ) — RR trên bao gồm cả quãng hồi giá về entry, chưa phải lợi nhuận thuần.`);
+    if (ts.rrWarning) lines.push(`🚩 RR bất thường cao (>${RR_WARN_THRESHOLD}:1) — không phản ánh xác suất thắng, không tăng khối lượng chỉ vì RR lớn.`);
   } else {
     lines.push("");
     lines.push(`>>> Chưa đủ điều kiện vào lệnh: ${NO_TRADE_REASONS[(ts&&ts.reason)||'mixed_trend']}`);
