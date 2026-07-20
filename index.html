@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Binance Unified Daytrade Lookup</title>
+<title>EMA + RSI + Price Action — Daytrade Lookup</title>
 <style>
   @font-face { font-family: 'JetBrains Mono'; src: local('JetBrains Mono'); }
   :root{
@@ -34,7 +34,6 @@
   .toggle-row{ display:flex; gap:6px; }
   .toggle-row button{ flex:1; background:var(--panel); color:var(--muted); border:1px solid var(--line); font-size:11px; padding:9px 6px; font-weight:600; }
   .toggle-row button.active{ background:var(--amber); color:#0b0d0f; border-color:var(--amber); }
-  .method-group{ margin-bottom:22px; }
 
   .state{ color:var(--muted); font-size:13px; padding:20px 0; }
   .err{ color:var(--red); }
@@ -61,9 +60,9 @@
   .badge.up{ color:var(--green); background:rgba(14,203,129,0.12); }
   .badge.down{ color:var(--red); background:rgba(246,70,93,0.12); }
   .badge.flat{ color:var(--amber); background:rgba(240,185,11,0.12); }
-  .badge.event{ color:var(--blue); background:rgba(77,158,255,0.12); }
   .badge.div-bull{ color:var(--green); background:rgba(14,203,129,0.12); }
   .badge.div-bear{ color:var(--red); background:rgba(246,70,93,0.12); }
+  .badge.watch{ color:#fff; background:rgba(240,185,11,0.25); border:1px solid var(--amber); }
 
   .metrics{ display:grid; grid-template-columns:repeat(2,1fr); gap:1px; background:var(--line); border-radius:4px; overflow:hidden; }
   .metric{ background:var(--panel2); padding:10px 12px; }
@@ -79,14 +78,10 @@
   .row-line .zone{ font-variant-numeric: tabular-nums; }
   .row-line.bullish{ border-left:3px solid var(--green); }
   .row-line.bearish{ border-left:3px solid var(--red); }
-  .row-line.swept{ opacity:0.55; }
   .tag{ font-size:9.5px; color:var(--muted); text-transform:uppercase; }
   .empty-note{ font-size:11.5px; color:var(--muted); font-style:italic; }
   .structure-path{ font-size:12px; color:var(--muted); }
   .structure-path b{ color:var(--text); }
-  .pd-bar{ position:relative; height:8px; background:linear-gradient(to right, var(--green), var(--amber), var(--red)); border-radius:4px; margin:8px 0 6px; }
-  .pd-marker{ position:absolute; top:-4px; width:2px; height:16px; background:var(--text); }
-  .pd-labels{ display:flex; justify-content:space-between; font-size:9.5px; color:var(--muted); }
 
   .copy-row{ margin-top:18px; }
   .copy-row button{ width:100%; padding:12px; font-size:12px; }
@@ -97,26 +92,6 @@
   .ny-session{ font-size:10.5px; color:var(--muted); text-align:right; margin-top:2px; }
   .ny-session .sess-on{ color:var(--amber); font-weight:700; }
   .ny-session .sess-off{ color:var(--muted); }
-
-  .badge.mss{ color:#fff; background:rgba(240,185,11,0.25); border:1px solid var(--amber); }
-  .badge.bos{ color:var(--blue); background:rgba(77,158,255,0.12); }
-  .badge.sweep{ color:var(--amber); background:rgba(240,185,11,0.10); }
-  .row-line.lowprob{ opacity:0.6; }
-  .tag.lowprob{ color:var(--red); }
-  .tag.silver{ color:var(--amber); }
-  .tag.insession{ color:var(--green); }
-
-  .po3-box{ border:1px solid var(--line); border-radius:6px; padding:14px 16px; margin-bottom:16px; background:var(--panel); }
-  .po3-box .stitle{ font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px; }
-  .po3-row{ font-size:12.5px; margin-bottom:4px; line-height:1.55; }
-  .po3-row b{ color:var(--amber); }
-  .po3-row.bias-up b{ color:var(--green); }
-  .po3-row.bias-down b{ color:var(--red); }
-
-  .row-line.breaker{ border-left:3px solid var(--amber); background:rgba(240,185,11,0.06); }
-  .row-line.mitigation{ border-left:3px solid var(--blue); background:rgba(77,158,255,0.06); }
-  .row-line.vi{ border-left:3px dashed var(--muted); }
-  .row-line.silverbullet{ border:1px solid var(--amber); background:rgba(240,185,11,0.10); }
 
   .trade-box{ border:1px solid var(--line); border-radius:6px; padding:14px 16px; margin-bottom:16px; }
   .trade-box.long{ border-color:var(--green); background:rgba(14,203,129,0.07); }
@@ -134,12 +109,14 @@
   .trade-line.sl .tl-value{ color:var(--red); }
   .trade-meta{ font-size:11.5px; color:var(--muted); margin-top:6px; line-height:1.6; }
   .trade-meta b{ color:var(--text); }
+  .watch-note{ font-size:11.5px; color:var(--amber); margin-top:8px; line-height:1.6; border-top:1px dashed var(--line); padding-top:8px; }
+  .manage-note{ font-size:11.5px; color:var(--muted); margin-top:8px; line-height:1.6; border-top:1px dashed var(--line); padding-top:8px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>Unified Daytrade Lookup</h1>
+    <h1>EMA + RSI + PA Lookup</h1>
     <div>
       <div class="clock" id="clock"></div>
       <div class="ny-session" id="nySession"></div>
@@ -152,16 +129,8 @@
   </div>
   <div class="quick" id="quickRow"></div>
 
-  <div class="option-group method-group">
-    <div class="option-label">Phương pháp phân tích</div>
-    <div class="toggle-row" id="methodToggle">
-      <button data-method="ema" class="active">EMA + RSI + Price Action</button>
-      <button data-method="ict">ICT Concept</button>
-    </div>
-  </div>
-
   <div class="option-group">
-    <div class="option-label">Khung thời gian</div>
+    <div class="option-label">Khung thời gian (context → confirm → trigger)</div>
     <div class="toggle-row" id="tfToggle">
       <button data-set="h4h1m15" class="active">H4 → H1 → M15</button>
       <button data-set="h1m15m5">H1 → M15 → M5</button>
@@ -169,11 +138,11 @@
   </div>
 
   <div id="content">
-    <div class="state">Nhập tên coin (VD: BTC, ETH, SOL, DOGE...), chọn phương pháp phân tích và bộ khung thời gian rồi bấm Tra.</div>
+    <div class="state">Nhập tên coin (VD: BTC, ETH, SOL, DOGE...), chọn bộ khung thời gian rồi bấm Tra. Công cụ chỉ dùng phương pháp EMA + RSI + Price Action (checklist 3 tầng), đúng bộ quy tắc mới nhất đang backtest.</div>
   </div>
 
   <footer>
-    Dữ liệu lấy trực tiếp từ Binance Public API (data-api.binance.vision), không cần đăng nhập hay API key. Mỗi khung đọc tới 300 nến gần nhất; FVG/Order Block/Liquidity/Volume Imbalance quét trên cửa sổ 120 nến gần nhất, đỉnh/đáy quan trọng (Premium/Discount) dùng cửa sổ 60 nến (50–75 theo khuyến nghị). Phân kỳ RSI (phương pháp EMA/RSI/PA) chỉ ghi nhận khi 2 đỉnh/đáy RSI cách nhau tối thiểu 2 nến. Swing high/low của ICT Concept dùng phương pháp fractal 5 nến mỗi bên. Phương pháp ICT Concept chỉ dùng thuần khái niệm ICT — không dùng RSI/Bollinger Bands — và đã bao gồm: lọc dữ liệu theo múi giờ New York (tự động EST/EDT) với 4 khung phiên (Asia 20:00–00:00, London Killzone 02:00–05:00, New York Killzone 07:00–10:00, London Close Killzone 10:00–12:00) — FVG/OB hình thành ngoài các khung này bị gắn nhãn ❌ Ngoài phiên giao dịch (Low Probability); dò tín hiệu Silver Bullet (London 03:00–04:00, NY AM 10:00–11:00, NY PM 14:00–15:00 giờ NY); phân biệt MSS (đảo chiều hợp lệ — bắt buộc có FVG đi kèm cây nến phá cấu trúc) với Liquidity Sweep/Purge (quét thanh khoản, không đổi xu hướng) và BOS (tiếp diễn); Breaker Block và Mitigation Block; Volume Imbalance (khoảng trống Close→Open); và mô hình PO3/IPDA (Accumulation → Manipulation → Distribution) đối chiếu giá hiện tại với giá mở cửa ngày tính theo 00:00 giờ New York. Đây là công cụ hỗ trợ đọc cấu trúc kỹ thuật — không phải khuyến nghị đầu tư, không thực hiện giao dịch.
+    Dữ liệu lấy trực tiếp từ Binance Public API (data-api.binance.vision), không cần đăng nhập hay API key. Mỗi khung đọc tới 300 nến gần nhất. Bối cảnh (context): EMA100 + Bollinger Band co/giãn + phân kỳ RSI. Xác nhận (confirm): EMA21&50 + RSI + cấu trúc HH-HL/LH-LL, bắt buộc đạt đủ cả 3/3 điều kiện. Trigger (entry): giá chạm EMA21 (nến A) rồi bung theo momentum hoặc phá râu nến trong tối đa 5 nến kế tiếp. SL = 0.35×ATR14 khung entry (sàn tối thiểu 0.15% giá). Chỉ 1 TP duy nhất (lấy theo hỗ trợ/kháng cự khung confirm), RR bắt buộc trong khoảng 1:1.8 → 1:3, ngoài khoảng này tín hiệu bị hủy. Phân kỳ RSI ngược chiều lệnh ở khung confirm hoặc khung context sẽ hủy tín hiệu; phân kỳ ngược chiều ở khung entry không chặn vào lệnh. Bollinger Band khung context đang "squeeze" (co thắt) sẽ bỏ qua tín hiệu. Đây là công cụ hỗ trợ đọc tín hiệu tại 1 thời điểm — không tự động theo dõi lệnh đang chạy, không phải khuyến nghị đầu tư.
   </footer>
 </div>
 
@@ -183,15 +152,27 @@ const TF_SETS = {
   h4h1m15: [{i:"4h",label:"H4",limit:300},{i:"1h",label:"H1",limit:300},{i:"15m",label:"M15",limit:300}],
   h1m15m5: [{i:"1h",label:"H1",limit:300},{i:"15m",label:"M15",limit:300},{i:"5m",label:"M5",limit:300}]
 };
-const SWING_LR = 5;           // độ nhạy swing cho ICT Concept: cân bằng
-const SWING_LOOKBACK = 60;    // số nến dùng để tìm đỉnh/đáy quan trọng (trong khoảng 50-75)
+const SWING_LOOKBACK = 60;    // số nến dùng để tìm hỗ trợ/kháng cự & đỉnh/đáy quan trọng
 const DIV_FRACTAL_LR = 3;     // độ nhạy đỉnh/đáy giá dùng để so phân kỳ RSI
 const DIV_MIN_DISTANCE = 2;   // khoảng cách tối thiểu (số nến) giữa 2 đỉnh/đáy RSI để tính là phân kỳ
-const ICT_LOOKBACK = 120;     // cửa sổ nến dùng để quét FVG / OB / Liquidity / Volume Imbalance cho ICT Concept
+const SWING_LR = 5;           // độ nhạy swing (fractal 5 nến mỗi bên) cho cấu trúc HH-HL/LH-LL
 
-// ================== IPDA / NEW YORK TIMEZONE ==================
-// Toàn bộ mốc giờ của ICT (Killzones, Silver Bullet, Macro) đều tính theo giờ New York
-// (tự động quy đổi EST/EDT theo lịch DST của Mỹ thông qua Intl timezone database).
+const BB_PERIOD = 20, BB_MULT = 2, BB_STATE_LOOKBACK = 50;
+
+const MIN_RR_EMA = 1.8;               // RR tối thiểu chấp nhận — 1:1.8
+const MAX_RR_EMA = 3.0;               // RR tối đa chấp nhận — 1:3
+
+const RSI_OVERBOUGHT_DIV = 72;        // đỉnh RSI >= ngưỡng này coi là quá mua (phân kỳ bearish)
+const RSI_OVERSOLD_DIV = 28;          // đáy RSI <= ngưỡng này coi là quá bán (phân kỳ bullish)
+const OB_OS_MIN_PROFIT_R = 0.3;       // lợi nhuận tối thiểu (R) để cho phép chốt sớm do nến đảo chiều mạnh
+const REVERSAL_CANDLE_VOL_MULT_STRONG = 3.0;
+const REVERSAL_CANDLE_VOL_MULT_SOFT = 2.0;
+const REVERSAL_CANDLE_RANGE_MULT_SOFT = 1.5;
+
+const ATR_SL_MULT_EMA = 0.35;         // hệ số nhân ATR cho buffer SL
+const SL_MIN_PCT_EMA = 0.0015;        // sàn buffer tối thiểu = 0.15% giá
+
+// ================== IPDA / NEW YORK TIMEZONE (chỉ dùng để hiển thị đồng hồ phiên) ==================
 const NY_TZ = 'America/New_York';
 
 function nyPartsFromMs(ms){
@@ -204,16 +185,8 @@ function nyPartsFromMs(ms){
   const get = t => parts.find(p=>p.type===t).value;
   let hour = parseInt(get('hour'),10); if (hour===24) hour = 0;
   const minute = parseInt(get('minute'),10);
-  const second = parseInt(get('second'),10);
-  return {
-    year:+get('year'), month:+get('month'), day:+get('day'),
-    hour, minute, second, weekday:get('weekday'),
-    minuteOfDay: hour*60+minute,
-    dateKey: `${get('year')}-${get('month')}-${get('day')}`
-  };
+  return { hour, minute, minuteOfDay: hour*60+minute };
 }
-
-// Các khung giờ vàng ICT (giờ NY) — dùng để xác định phiên & lọc tín hiệu Low Probability
 const SESSIONS = [
   {key:'asia',       label:'Asia Session (Asian Range)',      start:20*60, end:24*60},
   {key:'london_kz',  label:'London Killzone',                  start:2*60,  end:5*60},
@@ -223,49 +196,18 @@ const SESSIONS = [
 function getSessionForMinuteOfDay(mod){
   return SESSIONS.find(s => mod>=s.start && mod<s.end) || null;
 }
-
-// Khung giờ Silver Bullet (giờ NY) — chỉ tìm FVG entry trong các khung này
-const SILVER_BULLETS = [
-  {key:'london_sb', label:'London Silver Bullet',    start:3*60,  end:4*60},
-  {key:'ny_am_sb',  label:'New York AM Silver Bullet', start:10*60, end:11*60},
-  {key:'ny_pm_sb',  label:'New York PM Silver Bullet', start:14*60, end:15*60}
-];
-function getSilverBulletForMinuteOfDay(mod){
-  return SILVER_BULLETS.find(s => mod>=s.start && mod<s.end) || null;
-}
-
-// Các "Macro" 20-30 phút được ICT công bố (2022 Mentorship) — thời điểm dòng tiền tổ chức
-// thường can thiệp mạnh trong khung ngắn, dùng để tham khảo thêm bên trong các Killzone.
-const ICT_MACROS = [
-  {start:2*60+33,  end:3*60,      label:'Macro Mở cửa London'},
-  {start:4*60+3,   end:4*60+30,   label:'Macro London'},
-  {start:8*60+50,  end:9*60+10,   label:'Macro trước NY Open'},
-  {start:9*60+50,  end:10*60+10,  label:'Macro NY AM #1'},
-  {start:10*60+50, end:11*60+10,  label:'Macro NY AM #2'},
-  {start:11*60+50, end:12*60+10,  label:'Macro London Close'},
-  {start:13*60+10, end:13*60+40,  label:'Macro giữa phiên'},
-  {start:15*60+15, end:15*60+45,  label:'Macro Power Hour (cuối phiên)'}
-];
-function getMacroForMinuteOfDay(mod){
-  return ICT_MACROS.find(m => mod>=m.start && mod<m.end) || null;
-}
-
 function updateNYSessionDisplay(){
   const now = nyPartsFromMs(Date.now());
   const sess = getSessionForMinuteOfDay(now.minuteOfDay);
-  const sb = getSilverBulletForMinuteOfDay(now.minuteOfDay);
   const hh = String(now.hour).padStart(2,'0'), mm = String(now.minute).padStart(2,'0');
   let html = `NY: ${hh}:${mm} — `;
   html += sess ? `<span class="sess-on">${sess.label}</span>` : `<span class="sess-off">Ngoài Killzone</span>`;
-  if (sb) html += ` · <span class="sess-on">${sb.label}</span>`;
   const el = document.getElementById('nySession');
   if (el) el.innerHTML = html;
 }
 
 let currentSet = "h4h1m15";
-let currentMethod = "ema";
 let lastAnalysis = null;
-let lastMethod = null;
 
 async function fetchWithFallback(path){
   let lastErr;
@@ -279,7 +221,7 @@ async function fetchWithFallback(path){
   throw lastErr;
 }
 
-const quickCoins = ["BTC","ETH","SOL","BNB","XRP","DOGE"];
+const quickCoins = ["BTC","ETH","SOL","BNB","XRP","AVAX"];
 const content = document.getElementById('content');
 const input = document.getElementById('symbolInput');
 const quickRow = document.getElementById('quickRow');
@@ -319,15 +261,6 @@ document.querySelectorAll('#tfToggle button').forEach(btn=>{
   };
 });
 
-document.querySelectorAll('#methodToggle button').forEach(btn=>{
-  btn.onclick = () => {
-    document.querySelectorAll('#methodToggle button').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    currentMethod = btn.dataset.method;
-    if (input.value.trim()) lookup(input.value);
-  };
-});
-
 async function resolveSymbol(raw){
   const s = raw.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
   if (!s) throw new Error("empty");
@@ -351,22 +284,6 @@ async function symbolExists(sym){
   }catch(e){ return false; }
 }
 
-// Lấy giá Mở cửa ngày hiện tại tính theo mốc 00:00 giờ New York (Open_Daily) — nền tảng của mô hình PO3
-// (Accumulation → Manipulation → Distribution) của IPDA/ICT.
-async function fetchDailyOpenNY(symbol){
-  try{
-    const nowMs = Date.now();
-    const ny = nyPartsFromMs(nowMs);
-    const msSinceNYMidnight = (ny.hour*3600 + ny.minute*60 + ny.second)*1000;
-    const dailyOpenMs = nowMs - msSinceNYMidnight;
-    const res = await fetchWithFallback(`/api/v3/klines?symbol=${symbol}&interval=1m&startTime=${dailyOpenMs}&limit=1`);
-    if (!res.ok) return null;
-    const kl = await res.json();
-    if (!kl.length) return null;
-    return { open: parseFloat(kl[0][1]), openTimeMs: dailyOpenMs };
-  }catch(e){ return null; }
-}
-
 // ================== CHỈ BÁO DÙNG CHUNG ==================
 
 function ema(closes, period){
@@ -379,7 +296,7 @@ function ema(closes, period){
   return emaVal;
 }
 
-// Chuỗi EMA đầy đủ theo từng nến — cần thiết để dò tín hiệu EMA9 cắt EMA21 (entry trigger)
+// Chuỗi EMA đầy đủ theo từng nến — cần cho entry trigger (EMA21 touch + momentum/wick break)
 function emaSeries(closes, period){
   const out = new Array(closes.length).fill(null);
   if (closes.length < period) return out;
@@ -407,9 +324,6 @@ function stddevPop(values, period){
   return Math.sqrt(variance);
 }
 
-// Trạng thái Bollinger Band (co lại/giãn ra) — so bề rộng band hiện tại (tính theo % giá)
-// với bề rộng trung bình của BB_STATE_LOOKBACK nến gần nhất.
-const BB_PERIOD = 20, BB_MULT = 2, BB_STATE_LOOKBACK = 50;
 function bollingerState(closes, period=BB_PERIOD, mult=BB_MULT, lookback=BB_STATE_LOOKBACK){
   if (closes.length < period + lookback) return null;
   const widths = [];
@@ -434,7 +348,6 @@ function bollingerState(closes, period=BB_PERIOD, mult=BB_MULT, lookback=BB_STAT
   return { upper, lower, mid, widthPct: currentWidth, avgWidthPct: avgWidth, state };
 }
 
-// Chuỗi RSI (Wilder smoothing) đầy đủ theo từng nến — cần thiết để dò phân kỳ
 function rsiSeries(closes, period=14){
   const out = new Array(closes.length).fill(null);
   if (closes.length < period+1) return out;
@@ -456,17 +369,20 @@ function rsiSeries(closes, period=14){
   return out;
 }
 
-function rsiClass(r){
-  if (r===null || r===undefined) return "";
-  if (r>=70) return "warn";
-  if (r<=30) return "warn";
-  return "";
+function calcATR(klines, period=14){
+  if (!klines || klines.length < period+1) return null;
+  const trs = [];
+  for (let i=1; i<klines.length; i++){
+    const high = klines[i][2], low = klines[i][3], prevClose = klines[i-1][4];
+    trs.push(Math.max(high-low, Math.abs(high-prevClose), Math.abs(low-prevClose)));
+  }
+  const lastTrs = trs.slice(-period);
+  return lastTrs.reduce((a,b)=>a+b,0)/lastTrs.length;
 }
 
-// Tìm đỉnh/đáy fractal (đơn giản, dùng để so phân kỳ RSI)
 function findFractalSwings(klines, lr){
-  const highs = klines.map(k=>parseFloat(k[2]));
-  const lows = klines.map(k=>parseFloat(k[3]));
+  const highs = klines.map(k=>k[2]);
+  const lows = klines.map(k=>k[3]);
   const swings = [];
   for (let i=lr; i<klines.length-lr; i++){
     let isHigh = true, isLow = true;
@@ -481,10 +397,23 @@ function findFractalSwings(klines, lr){
   return swings.sort((a,b)=>a.index-b.index);
 }
 
-// Dò phân kỳ RSI thường (regular divergence) trên cửa sổ SWING_LOOKBACK nến gần nhất.
-// Chỉ so 2 đỉnh (hoặc 2 đáy) gần nhau nhất, và bắt buộc cách nhau >= DIV_MIN_DISTANCE nến.
+function labelSwings(swings){
+  let lastHigh=null, lastLow=null;
+  return swings.map(s=>{
+    s = {...s};
+    if (s.type==='high'){
+      s.label = lastHigh===null ? 'H' : (s.price>lastHigh ? 'HH' : 'LH');
+      lastHigh = s.price;
+    } else {
+      s.label = lastLow===null ? 'L' : (s.price<lastLow ? 'LL' : 'HL');
+      lastLow = s.price;
+    }
+    return s;
+  });
+}
+
 function detectRSIDivergence(klines, lookback=SWING_LOOKBACK, minDistance=DIV_MIN_DISTANCE){
-  const closesAll = klines.map(k=>parseFloat(k[4]));
+  const closesAll = klines.map(k=>k[4]);
   const rsiAll = rsiSeries(closesAll, 14);
   const startIdx = Math.max(0, klines.length - lookback);
   const windowKlines = klines.slice(startIdx);
@@ -515,13 +444,8 @@ function detectRSIDivergence(klines, lookback=SWING_LOOKBACK, minDistance=DIV_MI
   };
 }
 
-function divergenceBadgeHtml(div){
-  if (div.bullish) return `<span class="badge div-bull">PHÂN KỲ TĂNG (RSI)</span>`;
-  if (div.bearish) return `<span class="badge div-bear">PHÂN KỲ GIẢM (RSI)</span>`;
-  return '';
-}
-
 function divergenceSectionHtml(div){
+  div = div || {};
   const rows = [];
   if (div.bullish){
     const b = div.bullish;
@@ -535,1031 +459,382 @@ function divergenceSectionHtml(div){
   return `<div class="section"><div class="stitle">Phân kỳ RSI (đỉnh/đáy quan trọng, tối thiểu cách ${DIV_MIN_DISTANCE} nến)</div>${rows.join('')}</div>`;
 }
 
-// ================== PHƯƠNG PHÁP 1: EMA + RSI + PRICE ACTION (theo checklist 3 tầng) ==================
-// Tầng 1 "context"  (khung lớn nhất, VD H4/H1): EMA100 làm bối cảnh xu hướng + gần hỗ trợ/kháng cự
-//         + Bollinger Band co/giãn + phân kỳ RSI / quá mua-quá bán.
-// Tầng 2 "confirm"  (khung giữa, VD H1/M15): EMA21 & EMA50 cùng xác nhận bias tầng 1,
-//         RSI>50/<50 theo hướng, cấu trúc HH-HL (tăng) / LH-LL (giảm).
-// Tầng 3 "trigger"  (khung nhỏ nhất, VD M15/M5): giá chạm/pullback về EMA21, nến đóng cửa xác nhận
-//         đúng hướng, EMA9 cắt EMA21 đúng hướng trong vài nến gần nhất → điểm vào lệnh cụ thể.
-
 function swingRange(klines, lookback=SWING_LOOKBACK){
-  const slice = klines.slice(-lookback);
-  const highs = slice.map(k=>parseFloat(k[2]));
-  const lows = slice.map(k=>parseFloat(k[3]));
-  return { resistance: Math.max(...highs), support: Math.min(...lows) };
+  const sl = klines.slice(-lookback);
+  return { resistance: Math.max(...sl.map(k=>k[2])), support: Math.min(...sl.map(k=>k[3])) };
 }
 
+function trendLabelEMA(t){
+  if (t==='up') return 'TĂNG';
+  if (t==='down') return 'GIẢM';
+  return 'CHƯA RÕ (QUANH EMA100)';
+}
+function bbStateLabel(bb){
+  if (!bb) return 'chưa đủ dữ liệu';
+  if (bb.state==='squeeze') return 'đang co thắt (squeeze)';
+  if (bb.state==='expanding') return 'đang giãn nở (expanding)';
+  return 'bình thường';
+}
+
+// ================== TỔNG HỢP PHÂN TÍCH 1 KHUNG THỜI GIAN (analyzeTF_EMA) ==================
+// Đúng bản mới nhất trong ema_logic.py:
+//   context: EMA100 bias + gần hỗ trợ/kháng cự + Bollinger squeeze/expanding + phân kỳ RSI
+//   confirm: EMA21&50 align + RSI>50/<50 + cấu trúc HH-HL/LH-LL — BẮT BUỘC đạt đủ CẢ 3/3
+//   trigger: nến A chạm EMA21 (biên độ ~0.15%) rồi trong tối đa 5 nến kế tiếp, nến hiện tại
+//            đạt MOMENTUM (range lớn hơn A, đóng cửa xác nhận, các nến giữa đều range nhỏ)
+//            HOẶC WICK BREAK (lần đầu phá râu của A theo đúng chiều bias)
+
 function analyzeTF_EMA(klines, role, prevAnalysis){
-  const closes = klines.map(k=>parseFloat(k[4]));
+  const closes = klines.map(k=>k[4]);
   const lastClose = closes[closes.length-1];
-  const rsiAll = rsiSeries(closes,14);
+  const rsiAll = rsiSeries(closes, 14);
   const rsi = rsiAll[rsiAll.length-1];
   const divergence = detectRSIDivergence(klines);
-  const {resistance, support} = swingRange(klines, SWING_LOOKBACK);
+  const rng = swingRange(klines, SWING_LOOKBACK);
+  const resistance = rng.resistance, support = rng.support;
 
   if (role === 'context'){
-    const e100 = ema(closes,100);
+    const e100 = ema(closes, 100);
     let bias = 'flat';
-    if (e100!==null){
-      if (lastClose > e100) bias = 'up';
-      else if (lastClose < e100) bias = 'down';
-    }
+    if (e100!==null){ if (lastClose>e100) bias='up'; else if (lastClose<e100) bias='down'; }
     const bb = bollingerState(closes);
-    const range = resistance - support;
-    const nearResistance = range>0 && (resistance-lastClose) <= range*0.08;
-    const nearSupport = range>0 && (lastClose-support) <= range*0.08;
-    const obos = rsi===null ? null : (rsi>=70 ? 'overbought' : (rsi<=30 ? 'oversold' : null));
-    return { role, lastClose, e100, bias, bb, resistance, support, nearResistance, nearSupport, rsi, obos, divergence };
+    const rngSize = resistance - support;
+    const nearResistance = rngSize>0 && (resistance-lastClose) <= rngSize*0.08;
+    const nearSupport = rngSize>0 && (lastClose-support) <= rngSize*0.08;
+    return { role, lastClose, e100, bias, bb, resistance, support, nearResistance, nearSupport, rsi, divergence };
   }
 
   if (role === 'confirm'){
-    const e21 = ema(closes,21), e50 = ema(closes,50);
+    const e21 = ema(closes, 21), e50 = ema(closes, 50);
     const bias = prevAnalysis ? prevAnalysis.bias : 'flat';
-    const emaAligned = bias==='up' ? (e21!==null && e50!==null && lastClose>e21 && lastClose>e50)
-      : bias==='down' ? (e21!==null && e50!==null && lastClose<e21 && lastClose<e50) : false;
-    const rsiConfirm = bias==='up' ? (rsi!==null && rsi>50) : bias==='down' ? (rsi!==null && rsi<50) : false;
+    let emaAligned = false, rsiConfirm = false;
+    if (bias==='up'){ emaAligned = e21!==null && e50!==null && lastClose>e21 && lastClose>e50; rsiConfirm = rsi!==null && rsi>50; }
+    else if (bias==='down'){ emaAligned = e21!==null && e50!==null && lastClose<e21 && lastClose<e50; rsiConfirm = rsi!==null && rsi<50; }
     const swings = labelSwings(findFractalSwings(klines, SWING_LR));
     const recentLabels = swings.slice(-4).map(s=>s.label);
-    const structPath = recentLabels.join(' → ') || 'chưa đủ dữ liệu';
-    const structureConfirm = bias==='up' ? recentLabels.slice(-2).some(l=>l==='HH'||l==='HL')
-      : bias==='down' ? recentLabels.slice(-2).some(l=>l==='LH'||l==='LL') : false;
+    const structPath = recentLabels.length ? recentLabels.join(' → ') : 'chưa đủ dữ liệu';
+    let structureConfirm = false;
+    if (bias==='up') structureConfirm = recentLabels.slice(-2).some(l=>l==='HH'||l==='HL');
+    else if (bias==='down') structureConfirm = recentLabels.slice(-2).some(l=>l==='LH'||l==='LL');
     const confirmScore = [emaAligned, rsiConfirm, structureConfirm].filter(Boolean).length;
-    const confirmed = bias!=='flat' && confirmScore>=2;
+    const confirmed = bias!=='flat' && confirmScore===3; // bắt buộc đủ cả 3
     return { role, lastClose, e21, e50, rsi, bias, emaAligned, rsiConfirm, structureConfirm, structPath, confirmScore, confirmed, resistance, support, divergence };
   }
 
   // role === 'trigger'
-  const e9s = emaSeries(closes,9), e21s = emaSeries(closes,21);
-  const e9 = e9s[e9s.length-1], e21 = e21s[e21s.length-1];
+  const e9s = emaSeries(closes, 9), e21s = emaSeries(closes, 21), e20s = emaSeries(closes, 20);
+  const e9 = e9s[e9s.length-1], e21 = e21s[e21s.length-1], e20 = e20s[e20s.length-1];
   const bias = prevAnalysis ? prevAnalysis.bias : 'flat';
   const confirmed = prevAnalysis ? prevAnalysis.confirmed : false;
 
   const lastK = klines[klines.length-1];
-  const lastOpen = parseFloat(lastK[1]);
-  const tol = e21 ? e21*0.0015 : 0; // biên độ chấp nhận "chạm" EMA21 (~0.15%)
+  const lastOpen = lastK[1], lastHigh = lastK[2], lastLow = lastK[3];
+  const lastRange = lastHigh - lastLow;
+  const nK = klines.length;
 
-  let touch = false;
-  for (let i=0;i<=2 && !touch;i++){
-    const idx = klines.length-1-i;
-    if (idx<0 || e21s[idx]==null) continue;
-    const h = parseFloat(klines[idx][2]), l = parseFloat(klines[idx][3]);
-    if (l - tol <= e21s[idx] && h + tol >= e21s[idx]) touch = true;
+  let touch = false, candleConfirm = false;
+
+  if (bias==='up' || bias==='down'){
+    for (let offset=1; offset<=5; offset++){
+      const aIdx = nK - 1 - offset;
+      if (aIdx < 1 || e21s[aIdx]===null) continue;
+      const aHigh = klines[aIdx][2], aLow = klines[aIdx][3];
+      const aRange = aHigh - aLow;
+      const tol = e21s[aIdx] * 0.0015;
+      if (!(aLow - tol <= e21s[aIdx] && e21s[aIdx] <= aHigh + tol)) continue;
+
+      const middleIdx = [];
+      for (let m=aIdx+1; m<=nK-2; m++) middleIdx.push(m);
+
+      // (a) MOMENTUM
+      const middleSmall = middleIdx.every(m => (klines[m][2]-klines[m][3]) <= aRange);
+      if (middleSmall){
+        let momentumOk;
+        if (bias==='up') momentumOk = lastRange>aRange && lastClose>lastOpen && lastClose>e21;
+        else momentumOk = lastRange>aRange && lastClose<lastOpen && lastClose<e21;
+        if (momentumOk){ touch=true; candleConfirm=true; break; }
+      }
+
+      // (b) WICK BREAK
+      let brokeNow, brokeBefore;
+      if (bias==='up'){
+        brokeNow = lastHigh > aHigh;
+        brokeBefore = middleIdx.some(m => klines[m][2] > aHigh);
+      } else {
+        brokeNow = lastLow < aLow;
+        brokeBefore = middleIdx.some(m => klines[m][3] < aLow);
+      }
+      if (brokeNow && !brokeBefore){ touch=true; candleConfirm=true; break; }
+    }
   }
 
-  const candleConfirm = e21!==null && (bias==='up' ? (lastClose > lastOpen && lastClose > e21)
-    : bias==='down' ? (lastClose < lastOpen && lastClose < e21) : false);
-
-  let crossSignal = false, crossBarsAgo = null;
-  for (let i=1;i<=3;i++){
+  let crossSignal=false, crossBarsAgo=null;
+  for (let i=1; i<=3; i++){
     const idx = closes.length-i, prevIdx = idx-1;
     if (idx<1 || e9s[idx]==null || e9s[prevIdx]==null || e21s[idx]==null || e21s[prevIdx]==null) continue;
-    const wasBelow = e9s[prevIdx] <= e21s[prevIdx], isAbove = e9s[idx] > e21s[idx];
-    const wasAbove = e9s[prevIdx] >= e21s[prevIdx], isBelow = e9s[idx] < e21s[idx];
+    const wasBelow = e9s[prevIdx] <= e21s[prevIdx];
+    const isAbove = e9s[idx] > e21s[idx];
+    const wasAbove = e9s[prevIdx] >= e21s[prevIdx];
+    const isBelow = e9s[idx] < e21s[idx];
     if (bias==='up' && wasBelow && isAbove){ crossSignal=true; crossBarsAgo=i-1; break; }
     if (bias==='down' && wasAbove && isBelow){ crossSignal=true; crossBarsAgo=i-1; break; }
   }
 
   const triggerReady = confirmed && bias!=='flat' && touch && candleConfirm;
+  const atr14 = calcATR(klines, 14);
 
-  return { role, lastClose, e9, e21, bias, confirmed, touch, candleConfirm, crossSignal, crossBarsAgo, triggerReady, resistance, support, rsi, divergence };
+  return { role, lastClose, e9, e21, e20, bias, confirmed, touch, candleConfirm, crossSignal, crossBarsAgo, triggerReady, atr14, divergence };
 }
 
-function trendLabelEMA(t){
-  if (t==="up") return "TĂNG";
-  if (t==="down") return "GIẢM";
-  return "ĐI NGANG";
-}
-
-function bbStateLabel(bb){
-  if (!bb) return 'chưa đủ dữ liệu';
-  if (bb.state==='squeeze') return 'đang CO LẠI (squeeze — khả năng sắp biến động mạnh)';
-  if (bb.state==='expanding') return 'đang GIÃN RA (biến động mạnh, xu hướng đang chạy)';
-  return 'bình thường';
-}
-
+// ================== KHÔNG VÀO LỆNH — LÝ DO ==================
 const EMA_NO_TRADE_REASONS = {
   context_flat: (a)=>`Khung bối cảnh chưa rõ xu hướng — giá đang dao động quanh EMA100 (${a&&a.e100?fmtNum(a.e100):'—'}), nên đứng ngoài chờ giá thoát hẳn khỏi vùng này.`,
-  not_confirmed: (a)=>`Khung xác nhận chưa đủ điều kiện (chỉ đạt ${a?a.confirmScore:0}/3: EMA21&50 ${a&&a.emaAligned?'✔':'✘'}, RSI ${a&&a.rsiConfirm?'✔':'✘'}, cấu trúc ${a&&a.structureConfirm?'✔':'✘'}) — cần tối thiểu 2/3 cùng chiều với bối cảnh.`,
-  no_touch: ()=>'Giá chưa chạm/pullback về EMA21 ở khung entry — chưa có điểm vào lệnh hợp lý.',
-  no_candle_confirm: ()=>'Giá đã chạm EMA21 nhưng nến gần nhất chưa đóng cửa xác nhận đúng hướng.',
-  no_cross: ()=>'Chưa có tín hiệu EMA9 cắt EMA21 đúng hướng trong các nến gần đây — momentum entry chưa xác nhận.',
-  rr_low: ()=>'Có điểm entry hợp lệ nhưng khoảng cách tới mục tiêu không đủ để đạt tỷ lệ RR tối thiểu 1.5:1.',
-  mixed: ()=>'Chưa xác định được xu hướng bối cảnh rõ ràng.'
+  not_confirmed: (a)=>`Khung xác nhận chưa đủ điều kiện (chỉ đạt ${a?a.confirmScore:0}/3: EMA21&50 ${a&&a.emaAligned?'✔':'✘'}, RSI ${a&&a.rsiConfirm?'✔':'✘'}, cấu trúc ${a&&a.structureConfirm?'✔':'✘'}) — quy tắc mới bắt buộc đạt đủ 3/3, không còn chấp nhận 2/3.`,
+  no_touch: ()=>'Chưa có nến nào chạm EMA21 ở khung entry trong 5 nến gần nhất — chưa có điểm vào lệnh hợp lý.',
+  no_candle_confirm: ()=>'Đã có nến chạm EMA21 nhưng chưa có nến nào xác nhận tiếp diễn bằng momentum hoặc phá râu đúng chiều.',
+  bb_squeeze: ()=>'Khung bối cảnh đang trong trạng thái Bollinger Band co thắt (squeeze) — bỏ qua tín hiệu để tránh vào lệnh giữa vùng tích lũy hẹp.',
+  opposite_divergence_at_confirm_tf: ()=>'Khung xác nhận (confirm) đang có phân kỳ RSI ngược chiều lệnh — tín hiệu bị hủy theo quy tắc siết mới.',
+  opposite_divergence_at_context_tf: ()=>'Khung bối cảnh (context) đang có phân kỳ RSI ngược chiều lệnh — tín hiệu bị hủy theo quy tắc siết mới.',
+  tp_invalid: ()=>'Mức TP tính từ khung xác nhận nằm sai phía so với Entry — tín hiệu không hợp lệ.',
+  no_touch2: ()=>'Risk tính ra bằng 0 hoặc âm — không đủ điều kiện dựng lệnh.',
+  rr_low: (a,rr)=>`RR dự kiến (${rr?rr.toFixed(2):'—'}) thấp hơn mức tối thiểu ${MIN_RR_EMA} — tín hiệu bị hủy.`,
+  rr_too_high: (a,rr)=>`RR dự kiến (${rr?rr.toFixed(2):'—'}) vượt mức tối đa ${MAX_RR_EMA} — nhiều khả năng là "RR ảo", tín hiệu bị hủy.`,
+  mixed: ()=>'Chưa đủ điều kiện hợp lưu giữa 3 khung — đứng ngoài quan sát thêm.'
 };
 
+// ================== TRADE SETUP (buildTradeSetupEMA) ==================
 function buildTradeSetupEMA(bias, contextA, confirmA, triggerA){
-  if (contextA.bias === 'flat') return { ok:false, reason:'context_flat', data:contextA };
+  if (contextA.bias==='flat') return { ok:false, reason:'context_flat', data:contextA };
   if (!confirmA.confirmed) return { ok:false, reason:'not_confirmed', data:confirmA };
   if (!triggerA.touch) return { ok:false, reason:'no_touch' };
   if (!triggerA.candleConfirm) return { ok:false, reason:'no_candle_confirm' };
+  if (contextA.bb && contextA.bb.state==='squeeze') return { ok:false, reason:'bb_squeeze' };
 
-  const isUp = bias === 'up';
+  const isUp = bias==='up';
+
+  const confirmDiv = confirmA.divergence || {};
+  const oppositeDivAtConfirmTf = isUp ? confirmDiv.bearish : confirmDiv.bullish;
+  if (oppositeDivAtConfirmTf) return { ok:false, reason:'opposite_divergence_at_confirm_tf' };
+
+  const contextDivOpp = contextA.divergence || {};
+  const oppositeDivAtContextTf = isUp ? contextDivOpp.bearish : contextDivOpp.bullish;
+  if (oppositeDivAtContextTf) return { ok:false, reason:'opposite_divergence_at_context_tf' };
+
   const entry = triggerA.lastClose;
-  const buffer = Math.max(Math.abs(entry-triggerA.e21)*0.3, entry*0.0008);
-  const sl = isUp ? Math.min(triggerA.support, triggerA.e21) - buffer : Math.max(triggerA.resistance, triggerA.e21) + buffer;
-  let tp = isUp ? confirmA.resistance : confirmA.support;
-  if (isUp && tp<=entry) tp = contextA.resistance;
-  if (!isUp && tp>=entry) tp = contextA.support;
+
+  const atr14 = triggerA.atr14;
+  const atrBuffer = atr14 ? atr14*ATR_SL_MULT_EMA : Math.abs(entry - triggerA.e20)*0.3;
+  const buffer = Math.max(atrBuffer, entry*SL_MIN_PCT_EMA);
+  let sl;
+  if (isUp) sl = Math.min(triggerA.support, triggerA.e20) - buffer;
+  else sl = Math.max(triggerA.resistance, triggerA.e20) + buffer;
+
+  const tp = isUp ? confirmA.resistance : confirmA.support;
+  if (isUp && tp<=entry) return { ok:false, reason:'tp_invalid' };
+  if (!isUp && tp>=entry) return { ok:false, reason:'tp_invalid' };
 
   const risk = Math.abs(entry-sl);
-  if (risk<=0) return { ok:false, reason:'no_touch' };
-  let reward = Math.abs(tp-entry);
-  let rr = reward/risk;
-  if (rr < 1.5){
-    tp = isUp ? contextA.resistance : contextA.support;
-    reward = Math.abs(tp-entry);
-    rr = reward/risk;
+  if (risk<=0) return { ok:false, reason:'no_touch2' };
+
+  const contextDiv = contextA.divergence || {};
+  const sameDirDivergence = isUp ? !!contextDiv.bullish : !!contextDiv.bearish;
+  let obOsReversalWatch = false;
+  if (sameDirDivergence){
+    const divPair = isUp ? contextDiv.bullish : contextDiv.bearish;
+    if (divPair){
+      const p1rsi = divPair.p1.rsi, p2rsi = divPair.p2.rsi;
+      if (isUp) obOsReversalWatch = (p1rsi!==null && p1rsi<=RSI_OVERSOLD_DIV) || (p2rsi!==null && p2rsi<=RSI_OVERSOLD_DIV);
+      else obOsReversalWatch = (p1rsi!==null && p1rsi>=RSI_OVERBOUGHT_DIV) || (p2rsi!==null && p2rsi>=RSI_OVERBOUGHT_DIV);
+    }
   }
-  if (rr < 1.5) return { ok:false, reason:'rr_low' };
+
+  const reward = Math.abs(tp-entry);
+  const rr = reward/risk;
+  if (rr < MIN_RR_EMA) return { ok:false, reason:'rr_low', rr };
+  if (rr > MAX_RR_EMA) return { ok:false, reason:'rr_too_high', rr };
 
   let score = 50;
   score += confirmA.confirmScore===3 ? 15 : 8;
-  if (contextA.bb && contextA.bb.state==='squeeze') score += 5;
   if (isUp && contextA.nearSupport) score += 8;
   if (!isUp && contextA.nearResistance) score += 8;
   if (triggerA.crossBarsAgo===0) score += 7;
   if (rr>=2.5) score += 5;
   score = Math.min(88, score);
 
-  return { ok:true, direction:bias, entry, sl, tp, risk, reward, rr, score };
+  return { ok:true, direction:bias, entry, sl, tp, risk, reward, rr, score, obOsReversalWatch };
 }
 
-function buildTradeHtmlEMA(setup){
+function buildTradeHtmlEMA(setup, contextA){
   if (!setup || !setup.ok){
-    const reasonFn = EMA_NO_TRADE_REASONS[setup ? setup.reason : 'mixed'] || EMA_NO_TRADE_REASONS.mixed;
-    const reasonText = reasonFn(setup ? setup.data : null);
-    return `
-      <div class="trade-box none">
-        <div class="stitle">Gợi ý lệnh (Entry / TP / SL)</div>
-        <div class="empty-note">🚫 Chưa đủ điều kiện vào lệnh lúc này. ${reasonText} Nên đứng ngoài quan sát.</div>
-      </div>`;
-  }
-  const isUp = setup.direction === 'up';
-  const dirLabel = isUp ? 'LONG (MUA)' : 'SHORT (BÁN)';
-  const dirCls = isUp ? 'long' : 'short';
-  return `
-    <div class="trade-box ${dirCls}">
-      <div class="stitle">Gợi ý lệnh (Entry / TP / SL)</div>
-      <div class="trade-header ${dirCls}">✅ ${dirLabel} — EMA100 (bias) → EMA21&50 (xác nhận) → EMA9×21 (trigger)</div>
-      <div class="trade-line entry"><span class="tl-label">Entry</span><span class="tl-value">${fmtNum(setup.entry)}</span></div>
-      <div class="trade-line tp"><span class="tl-label">TP (~${setup.score}% hợp lưu)</span><span class="tl-value">${fmtNum(setup.tp)}</span></div>
-      <div class="trade-line sl"><span class="tl-label">SL</span><span class="tl-value">${fmtNum(setup.sl)}</span></div>
-      <div class="trade-meta">Tỷ lệ RR ≈ <b>1 : ${setup.rr.toFixed(2)}</b> (tối thiểu 1.5:1). Entry dựa trên pullback về EMA21 + nến xác nhận + EMA9 cắt EMA21 đúng hướng ở khung entry. % hợp lưu là điểm ước tính theo số điều kiện thỏa mãn (BB squeeze, gần hỗ trợ/kháng cự, cấu trúc, RSI, thời điểm cắt EMA...), <b>không phải xác suất thắng thống kê thực tế</b> — luôn tự quản trị rủi ro.</div>
+    const reasonFn = EMA_NO_TRADE_REASONS[setup?setup.reason:'mixed'] || EMA_NO_TRADE_REASONS.mixed;
+    const reasonData = setup && setup.data ? setup.data : contextA;
+    return `<div class="trade-box none">
+      <div class="stitle">Gợi ý lệnh cụ thể</div>
+      <div class="empty-note">Chưa đủ điều kiện vào lệnh. ${reasonFn(reasonData, setup?setup.rr:null)}</div>
     </div>`;
+  }
+  const isUp = setup.direction==='up';
+  const dirCls = isUp?'long':'short';
+  const dirLabel = isUp?'MUA (LONG)':'BÁN (SHORT)';
+  let watchHtml = '';
+  if (setup.obOsReversalWatch){
+    watchHtml = `<div class="watch-note">⚠ <b>Cờ theo dõi đảo chiều (ob_os_reversal_watch)</b>: khung bối cảnh đang có phân kỳ RSI CÙNG chiều lệnh tại vùng quá mua/quá bán — TP vẫn đặt bình thường, nhưng khi lệnh đang chạy, nếu xuất hiện 1 nến ngược màu với nến trước đó, kèm volume ≥3 lần (hoặc volume ≥2 lần + range ≥1.5 lần) VÀ lợi nhuận hiện tại đã ≥ ${OB_OS_MIN_PROFIT_R}R → nên chốt lệnh ngay tại giá đóng cửa nến đó thay vì chờ TP.</div>`;
+  }
+  const manageHtml = `<div class="manage-note">Quản trị đề xuất: chỉ 1 TP duy nhất, không dời breakeven từng phần. Nếu lệnh đang lời (giá thuận chiều so với Entry) mà khung entry xuất hiện phân kỳ RSI ngược chiều lệnh → nên chốt lệnh tại giá đóng cửa của nến kế tiếp sau khi phân kỳ được xác nhận đóng nến.</div>`;
+  return `<div class="trade-box ${dirCls}">
+    <div class="stitle">Gợi ý lệnh cụ thể</div>
+    <div class="trade-header ${dirCls}">✅ ${dirLabel} — EMA100 (bias) → EMA21&50 (xác nhận, 3/3) → EMA21 touch + momentum/wick break (trigger)</div>
+    <div class="trade-line entry"><span class="tl-label">Entry (lệnh thị trường)</span><span class="tl-value">${fmtNum(setup.entry)}</span></div>
+    <div class="trade-line sl"><span class="tl-label">Stop Loss</span><span class="tl-value">${fmtNum(setup.sl)}</span></div>
+    <div class="trade-line tp"><span class="tl-label">Take Profit (duy nhất)</span><span class="tl-value">${fmtNum(setup.tp)}</span></div>
+    <div class="trade-meta">Tỷ lệ RR ≈ <b>1 : ${setup.rr.toFixed(2)}</b> (bắt buộc trong khoảng ${MIN_RR_EMA} – ${MAX_RR_EMA}). SL = 0.35×ATR14 khung entry (sàn 0.15% giá) tính từ hỗ trợ/kháng cự & EMA20 gần nhất. Điểm hợp lưu ước tính: <b>${setup.score}/100</b> — <b>không phải xác suất thắng thống kê thực tế</b>, luôn tự quản trị rủi ro.</div>
+    ${watchHtml}
+    ${manageHtml}
+  </div>`;
 }
 
 function renderEMA(results, tfs){
   const contextA = results[0].analysis, confirmA = results[1].analysis, triggerA = results[2].analysis;
   const bias = contextA.bias;
-
-  let confClass, verdictClass, verdictText;
-  if (bias==='up'){
-    verdictClass = 'up';
-    confClass = (confirmA.confirmed && triggerA.triggerReady) ? 'bull' : 'mixed';
-    verdictText = !confirmA.confirmed ? 'BỐI CẢNH TĂNG — CHƯA ĐƯỢC XÁC NHẬN'
-      : (triggerA.triggerReady ? 'BỐI CẢNH TĂNG — ĐÃ ĐỦ ĐIỀU KIỆN VÀO LỆNH' : 'BỐI CẢNH TĂNG — CHỜ ENTRY TRIGGER');
-  } else if (bias==='down'){
-    verdictClass = 'down';
-    confClass = (confirmA.confirmed && triggerA.triggerReady) ? 'bear' : 'mixed';
-    verdictText = !confirmA.confirmed ? 'BỐI CẢNH GIẢM — CHƯA ĐƯỢC XÁC NHẬN'
-      : (triggerA.triggerReady ? 'BỐI CẢNH GIẢM — ĐÃ ĐỦ ĐIỀU KIỆN VÀO LỆNH' : 'BỐI CẢNH GIẢM — CHỜ ENTRY TRIGGER');
-  } else {
-    confClass='mixed'; verdictClass='flat'; verdictText='CHƯA RÕ BỐI CẢNH (GIÁ QUANH EMA100)';
-  }
+  let confClass='mixed', verdictClass='flat', verdictText='CHƯA RÕ BỐI CẢNH (GIÁ QUANH EMA100)';
+  if (bias==='up' && confirmA.confirmed && triggerA.triggerReady){ confClass='bull'; verdictClass='up'; verdictText='HỢP LƯU TĂNG — ĐỦ ĐIỀU KIỆN XÉT LỆNH MUA'; }
+  else if (bias==='down' && confirmA.confirmed && triggerA.triggerReady){ confClass='bear'; verdictClass='down'; verdictText='HỢP LƯU GIẢM — ĐỦ ĐIỀU KIỆN XÉT LỆNH BÁN'; }
+  else if (bias!=='flat'){ confClass='mixed'; verdictClass='flat'; verdictText = bias==='up' ? 'BỐI CẢNH TĂNG NHƯNG CHƯA ĐỦ HỢP LƯU' : 'BỐI CẢNH GIẢM NHƯNG CHƯA ĐỦ HỢP LƯU'; }
 
   const noteParts = [];
   noteParts.push(`Khung ${tfs[0].label} (bối cảnh): giá đang ${bias==='up'?'trên':bias==='down'?'dưới':'quanh'} EMA100 (${contextA.e100?fmtNum(contextA.e100):'—'})${contextA.nearResistance?', gần kháng cự '+fmtNum(contextA.resistance):contextA.nearSupport?', gần hỗ trợ '+fmtNum(contextA.support):''}. Bollinger Band ${bbStateLabel(contextA.bb)}.`);
-  if (contextA.divergence.bullish || contextA.divergence.bearish) noteParts.push('Có tín hiệu phân kỳ RSI ở khung bối cảnh, nên thận trọng.');
-  noteParts.push(`Khung ${tfs[1].label} (xác nhận): EMA21&50 ${confirmA.emaAligned?'✔ xác nhận':'✘ chưa xác nhận'}, RSI ${confirmA.rsi!==null?confirmA.rsi.toFixed(1):'—'} ${confirmA.rsiConfirm?'✔':'✘'}, cấu trúc gần đây ${confirmA.structPath} ${confirmA.structureConfirm?'✔':'✘'} (${confirmA.confirmScore}/3 điều kiện).`);
-  noteParts.push(`Khung ${tfs[2].label} (entry trigger): chạm EMA21 ${triggerA.touch?'✔':'✘'}, nến xác nhận ${triggerA.candleConfirm?'✔':'✘'}, EMA9 cắt EMA21 đúng hướng ${triggerA.crossSignal?'✔':'✘'}.`);
-  const note = noteParts.join(' ');
+  noteParts.push(`Khung ${tfs[1].label} (xác nhận): EMA21&50 ${confirmA.emaAligned?'✔':'✘'}, RSI ${confirmA.rsi!==null?confirmA.rsi.toFixed(1):'—'} ${confirmA.rsiConfirm?'✔':'✘'}, cấu trúc gần đây ${confirmA.structPath} ${confirmA.structureConfirm?'✔':'✘'} — ${confirmA.confirmScore}/3 điều kiện (bắt buộc 3/3).`);
+  noteParts.push(`Khung ${tfs[2].label} (entry trigger): chạm EMA21 trong 5 nến gần nhất ${triggerA.touch?'✔':'✘'}, nến xác nhận momentum/phá râu ${triggerA.candleConfirm?'✔':'✘'}, EMA9 cắt EMA21 đúng hướng ${triggerA.crossSignal?`✔ (${triggerA.crossBarsAgo} nến trước, chỉ tham khảo)`:'✘'}.`);
+
+  let html = `<div class="confluence ${confClass}">
+      <div class="title">Hợp lưu đa khung theo checklist (EMA100 → EMA21&50, 3/3 → EMA21 touch + trigger) — ${tfs.map(t=>t.label).join(' / ')}</div>
+      <div class="verdict ${verdictClass}">${verdictText}</div>
+      <div class="note">${noteParts.join(' ')}</div>
+    </div>`;
 
   const tradeSetup = buildTradeSetupEMA(bias, contextA, confirmA, triggerA);
+  html += buildTradeHtmlEMA(tradeSetup, contextA);
 
-  const confluenceHtml = `
-    <div class="confluence ${confClass}">
-      <div class="title">Hợp lưu đa khung theo checklist (EMA100 → EMA21&50 → EMA9×21) — ${tfs.map(t=>t.label).join(' / ')}</div>
-      <div class="verdict ${verdictClass}">${verdictText}</div>
-      <div class="note">${note}</div>
-    </div>
-    ${buildTradeHtmlEMA(tradeSetup)}`;
-
-  const roleLabels = ['Bối cảnh (context)', 'Xác nhận (confirm)', 'Entry trigger'];
-  const cardsHtml = results.map((r,idx)=>{
-    const a = r.analysis;
-    let bodyHtml;
-    if (a.role==='context'){
-      const rC = rsiClass(a.rsi);
-      bodyHtml = `
-        <div class="metrics">
-          <div class="metric"><div class="label">Giá hiện tại</div><div class="value">${fmtNum(a.lastClose)}</div></div>
-          <div class="metric"><div class="label">EMA100</div><div class="value">${a.e100?fmtNum(a.e100):'—'}</div></div>
-          <div class="metric"><div class="label">RSI 14</div><div class="value ${rC}">${a.rsi!==null?a.rsi.toFixed(1):'—'}${a.obos?` (${a.obos==='overbought'?'quá mua':'quá bán'})`:''}</div></div>
-          <div class="metric"><div class="label">Bollinger Band</div><div class="value">${a.bb?a.bb.state:'—'}</div></div>
-          <div class="metric"><div class="label">Kháng cự gần (${SWING_LOOKBACK} nến)</div><div class="value down">${fmtNum(a.resistance)}${a.nearResistance?' (gần)':''}</div></div>
-          <div class="metric"><div class="label">Hỗ trợ gần (${SWING_LOOKBACK} nến)</div><div class="value up">${fmtNum(a.support)}${a.nearSupport?' (gần)':''}</div></div>
-        </div>
-        ${divergenceSectionHtml(a.divergence)}`;
-    } else if (a.role==='confirm'){
-      bodyHtml = `
-        <div class="metrics">
-          <div class="metric"><div class="label">Giá hiện tại</div><div class="value">${fmtNum(a.lastClose)}</div></div>
-          <div class="metric"><div class="label">EMA21</div><div class="value">${a.e21?fmtNum(a.e21):'—'}</div></div>
-          <div class="metric"><div class="label">EMA50</div><div class="value">${a.e50?fmtNum(a.e50):'—'}</div></div>
-          <div class="metric"><div class="label">RSI 14</div><div class="value">${a.rsi!==null?a.rsi.toFixed(1):'—'}</div></div>
-        </div>
-        <div class="structure-path">Cấu trúc gần đây: <b>${a.structPath}</b></div>
-        <div class="section">
-          <div class="row-line ${a.emaAligned?'bullish':'bearish'}"><span>EMA21&50 xác nhận bối cảnh</span><span class="zone">${a.emaAligned?'✔ Có':'✘ Chưa'}</span></div>
-          <div class="row-line ${a.rsiConfirm?'bullish':'bearish'}"><span>RSI xác nhận (&gt;50/&lt;50)</span><span class="zone">${a.rsiConfirm?'✔ Có':'✘ Chưa'}</span></div>
-          <div class="row-line ${a.structureConfirm?'bullish':'bearish'}"><span>Cấu trúc HH-HL / LH-LL</span><span class="zone">${a.structureConfirm?'✔ Có':'✘ Chưa'}</span></div>
-        </div>`;
+  results.forEach((r, idx)=>{
+    const a = r.analysis, tf = r.tf;
+    html += `<div class="tf-card">
+      <div class="tf-head">
+        <span class="tf-name">${tf.label} ${idx===0?'(Bối cảnh)':idx===1?'(Xác nhận)':'(Entry trigger)'}</span>
+        <span class="tf-trend ${a.bias||'flat'}">${trendLabelEMA(a.bias)}</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="label">Giá đóng cửa</div><div class="value">${fmtNum(a.lastClose)}</div></div>`;
+    if (idx===0){
+      html += `<div class="metric"><div class="label">EMA100</div><div class="value">${a.e100?fmtNum(a.e100):'—'}</div></div>
+        <div class="metric"><div class="label">RSI14</div><div class="value ${a.rsi>=70||a.rsi<=30?'warn':''}">${a.rsi!==null?a.rsi.toFixed(1):'—'}</div></div>
+        <div class="metric"><div class="label">Bollinger Band</div><div class="value">${bbStateLabel(a.bb)}</div></div>`;
+    } else if (idx===1){
+      html += `<div class="metric"><div class="label">EMA21</div><div class="value">${a.e21?fmtNum(a.e21):'—'}</div></div>
+        <div class="metric"><div class="label">EMA50</div><div class="value">${a.e50?fmtNum(a.e50):'—'}</div></div>
+        <div class="metric"><div class="label">RSI14</div><div class="value">${a.rsi!==null?a.rsi.toFixed(1):'—'}</div></div>`;
     } else {
-      bodyHtml = `
-        <div class="metrics">
-          <div class="metric"><div class="label">Giá hiện tại</div><div class="value">${fmtNum(a.lastClose)}</div></div>
-          <div class="metric"><div class="label">EMA9</div><div class="value">${a.e9?fmtNum(a.e9):'—'}</div></div>
-          <div class="metric"><div class="label">EMA21</div><div class="value">${a.e21?fmtNum(a.e21):'—'}</div></div>
-        </div>
-        <div class="section">
-          <div class="row-line ${a.touch?'bullish':'bearish'}"><span>Giá chạm EMA21</span><span class="zone">${a.touch?'✔ Có':'✘ Chưa'}</span></div>
-          <div class="row-line ${a.candleConfirm?'bullish':'bearish'}"><span>Nến xác nhận đúng hướng</span><span class="zone">${a.candleConfirm?'✔ Có':'✘ Chưa'}</span></div>
-          <div class="row-line ${a.crossSignal?'bullish':'bearish'}"><span>EMA9 cắt EMA21 đúng hướng</span><span class="zone">${a.crossSignal?`✔ Có (${a.crossBarsAgo} nến trước)`:'✘ Chưa'}</span></div>
-        </div>`;
+      html += `<div class="metric"><div class="label">EMA9</div><div class="value">${a.e9?fmtNum(a.e9):'—'}</div></div>
+        <div class="metric"><div class="label">EMA21</div><div class="value">${a.e21?fmtNum(a.e21):'—'}</div></div>`;
     }
-    return `
-      <div class="tf-card">
-        <div class="tf-head">
-          <div class="tf-name">${r.tf.label} — ${roleLabels[idx]}</div>
-          <div><span class="tf-trend ${bias}">${trendLabelEMA(bias)}</span></div>
-        </div>
-        ${bodyHtml}
-      </div>`;
-  }).join('');
+    html += `</div>`;
 
-  return { confluenceHtml, cardsHtml, verdictText, note, tradeSetup };
+    if (idx===1){
+      html += `<div class="section"><div class="stitle">Checklist xác nhận (bắt buộc 3/3)</div>
+        <div class="row-line ${a.emaAligned?'bullish':'bearish'}"><span>EMA21&50 xác nhận bối cảnh</span><span class="zone">${a.emaAligned?'✔ Có':'✘ Chưa'}</span></div>
+        <div class="row-line ${a.rsiConfirm?'bullish':'bearish'}"><span>RSI xác nhận (>50 tăng / <50 giảm)</span><span class="zone">${a.rsiConfirm?'✔ Có':'✘ Chưa'}</span></div>
+        <div class="row-line ${a.structureConfirm?'bullish':'bearish'}"><span>Cấu trúc HH-HL / LH-LL</span><span class="zone structure-path"><b>${a.structPath}</b></span></div>
+      </div>`;
+    }
+    if (idx===2){
+      html += `<div class="section"><div class="stitle">Entry trigger (nến A chạm EMA21 → tối đa 5 nến xác nhận)</div>
+        <div class="row-line ${a.touch?'bullish':'bearish'}"><span>Có nến chạm EMA21 hợp lệ</span><span class="zone">${a.touch?'✔ Có':'✘ Chưa'}</span></div>
+        <div class="row-line ${a.candleConfirm?'bullish':'bearish'}"><span>Xác nhận momentum hoặc phá râu đúng chiều</span><span class="zone">${a.candleConfirm?'✔ Có':'✘ Chưa'}</span></div>
+        <div class="row-line ${a.crossSignal?'bullish':'bearish'}"><span>EMA9 cắt EMA21 đúng hướng (tham khảo)</span><span class="zone">${a.crossSignal?`✔ Có (${a.crossBarsAgo} nến trước)`:'✘ Chưa'}</span></div>
+      </div>`;
+    }
+    html += divergenceSectionHtml(a.divergence);
+    html += `</div>`;
+  });
+
+  return html;
 }
 
 function buildAnalysisTextEMA(){
-  const lines = [];
+  if (!lastAnalysis) return '';
+  const { symbol, tfs, results } = lastAnalysis;
   const now = new Date().toLocaleString('vi-VN');
-  const { symbol, tfs, results, verdictText, note, tradeSetup } = lastAnalysis;
-  lines.push(`Phân tích EMA+RSI+PA theo checklist (MTF) ${symbol} — ${tfs.map(t=>t.label).join('/')} — ${now}`);
-  lines.push(`Kết luận: ${verdictText}`);
-  lines.push(note);
-  if (tradeSetup && tradeSetup.ok){
-    lines.push(`Gợi ý lệnh: ${tradeSetup.direction==='up'?'LONG':'SHORT'} | Entry ${fmtNum(tradeSetup.entry)} | TP ${fmtNum(tradeSetup.tp)} | SL ${fmtNum(tradeSetup.sl)} | RR 1:${tradeSetup.rr.toFixed(2)} | ~${tradeSetup.score}% hợp lưu`);
-  } else {
-    lines.push('Gợi ý lệnh: chưa đủ điều kiện vào lệnh lúc này.');
-  }
-  lines.push("");
-  results.forEach(r=>{
+  const lines = [];
+  lines.push(`Phân tích EMA+RSI+PA (checklist 3 tầng, MTF) ${symbol} — ${tfs.map(t=>t.label).join('/')} — ${now}`);
+  results.forEach((r, idx)=>{
     const a = r.analysis;
-    if (a.role==='context'){
+    if (idx===0){
       lines.push(`[${r.tf.label} - Bối cảnh] Giá: ${fmtNum(a.lastClose)} | EMA100: ${a.e100?fmtNum(a.e100):'—'} | Bias: ${trendLabelEMA(a.bias)} | RSI14: ${a.rsi!==null?a.rsi.toFixed(1):'—'} | BB: ${a.bb?a.bb.state:'—'} | Kháng cự: ${fmtNum(a.resistance)} | Hỗ trợ: ${fmtNum(a.support)}`);
-      if (a.divergence.bullish) lines.push(`  Phân kỳ tăng RSI: giá ${fmtNum(a.divergence.bullish.p1.price)}→${fmtNum(a.divergence.bullish.p2.price)}, RSI ${a.divergence.bullish.p1.rsi.toFixed(1)}→${a.divergence.bullish.p2.rsi.toFixed(1)} (cách ${a.divergence.bullish.distance} nến)`);
-      if (a.divergence.bearish) lines.push(`  Phân kỳ giảm RSI: giá ${fmtNum(a.divergence.bearish.p1.price)}→${fmtNum(a.divergence.bearish.p2.price)}, RSI ${a.divergence.bearish.p1.rsi.toFixed(1)}→${a.divergence.bearish.p2.rsi.toFixed(1)} (cách ${a.divergence.bearish.distance} nến)`);
-    } else if (a.role==='confirm'){
+    } else if (idx===1){
       lines.push(`[${r.tf.label} - Xác nhận] EMA21: ${a.e21?fmtNum(a.e21):'—'} | EMA50: ${a.e50?fmtNum(a.e50):'—'} | RSI14: ${a.rsi!==null?a.rsi.toFixed(1):'—'} | Cấu trúc: ${a.structPath} | Điểm xác nhận: ${a.confirmScore}/3`);
     } else {
-      lines.push(`[${r.tf.label} - Entry trigger] EMA9: ${a.e9?fmtNum(a.e9):'—'} | EMA21: ${a.e21?fmtNum(a.e21):'—'} | Chạm EMA21: ${a.touch?'Có':'Chưa'} | Nến xác nhận: ${a.candleConfirm?'Có':'Chưa'} | EMA9×21 cross: ${a.crossSignal?'Có':'Chưa'}`);
+      lines.push(`[${r.tf.label} - Entry trigger] EMA9: ${a.e9?fmtNum(a.e9):'—'} | EMA21: ${a.e21?fmtNum(a.e21):'—'} | Chạm EMA21 (5 nến): ${a.touch?'Có':'Chưa'} | Nến xác nhận: ${a.candleConfirm?'Có':'Chưa'} | EMA9×21 cross: ${a.crossSignal?'Có':'Chưa'}`);
     }
   });
+  const setup = buildTradeSetupEMA(results[0].analysis.bias, results[0].analysis, results[1].analysis, results[2].analysis);
+  if (setup.ok){
+    lines.push(`>>> LỆNH: ${setup.direction==='up'?'MUA':'BÁN'} | Entry ${fmtNum(setup.entry)} | SL ${fmtNum(setup.sl)} | TP ${fmtNum(setup.tp)} | RR 1:${setup.rr.toFixed(2)} | Điểm ${setup.score}/100${setup.obOsReversalWatch?' | ⚠ Có cờ theo dõi đảo chiều sớm (ob_os_reversal_watch)':''}`);
+  } else {
+    lines.push(`>>> CHƯA VÀO LỆNH: ${setup.reason}`);
+  }
   return lines.join('\n');
 }
-
-
-// ================== PHƯƠNG PHÁP 2: ICT CONCEPT ==================
-// Chỉ dùng thuần các khái niệm ICT: cấu trúc thị trường (BOS/CHoCH), Order Block,
-// Fair Value Gap, vùng thanh khoản (Equal Highs/Lows), Premium/Discount.
-// KHÔNG dùng RSI, KHÔNG dùng Bollinger Bands.
-
-function findSwings(klines, lr=SWING_LR){
-  return findFractalSwings(klines, lr);
-}
-
-function labelSwings(swings){
-  let lastHigh=null, lastLow=null;
-  return swings.map(s=>{
-    let label;
-    if (s.type==='high'){
-      label = lastHigh===null ? 'H' : (s.price>lastHigh? 'HH':'LH');
-      lastHigh = s.price;
-    } else {
-      label = lastLow===null ? 'L' : (s.price<lastLow? 'LL':'HL');
-      lastLow = s.price;
-    }
-    return {...s, label};
-  });
-}
-
-// Cấu trúc thị trường theo đúng chuẩn ICT:
-// - BOS (Break of Structure): phá cấu trúc CÙNG chiều xu hướng hiện tại → xu hướng tiếp diễn.
-// - MSS (Market Structure Shift): phá cấu trúc NGƯỢC chiều xu hướng hiện tại VÀ nến phá vỡ
-//   để lại một FVG đi kèm → đây mới là tín hiệu đảo chiều xu hướng hợp lệ theo ICT.
-// - Liquidity Sweep/Purge: phá đỉnh/đáy cũ ngược chiều xu hướng nhưng KHÔNG để lại FVG →
-//   ICT coi đây chỉ là hành vi quét thanh khoản, xu hướng cũ vẫn được giữ nguyên (không đổi trend).
-function findStructureEvents(klines, swings, lr=SWING_LR){
-  const closes = klines.map(k=>parseFloat(k[4]));
-  let trend = null;
-  let activeHigh = null, activeLow = null;
-  const events = [];
-  const sorted = swings.slice().sort((a,b)=> (a.index+lr) - (b.index+lr));
-  let si = 0;
-  for (let i=0; i<klines.length; i++){
-    while (si < sorted.length && sorted[si].index+lr <= i){
-      const sw = sorted[si];
-      if (sw.type==='high') activeHigh = sw;
-      else activeLow = sw;
-      si++;
-    }
-    if (activeHigh && closes[i] > activeHigh.price){
-      const hasFVG = i>=2 && parseFloat(klines[i][3]) > parseFloat(klines[i-2][2]); // low[i] > high[i-2]
-      let type;
-      if (trend === 'down') type = hasFVG ? 'MSS' : 'Liquidity Sweep';
-      else type = 'BOS';
-      events.push({index:i, price:closes[i], type, direction:'up', brokenLevel:activeHigh.price, hasFVG});
-      if (type !== 'Liquidity Sweep') trend = 'up';
-      activeHigh = null;
-    }
-    if (activeLow && closes[i] < activeLow.price){
-      const hasFVG = i>=2 && parseFloat(klines[i][2]) < parseFloat(klines[i-2][3]); // high[i] < low[i-2]
-      let type;
-      if (trend === 'up') type = hasFVG ? 'MSS' : 'Liquidity Sweep';
-      else type = 'BOS';
-      events.push({index:i, price:closes[i], type, direction:'down', brokenLevel:activeLow.price, hasFVG});
-      if (type !== 'Liquidity Sweep') trend = 'down';
-      activeLow = null;
-    }
-  }
-  return { events, trend };
-}
-
-// Breaker Block: giá quét thanh khoản (Liquidity Sweep) một bên, sau đó đảo chiều phá vỡ
-// cấu trúc đối diện mạnh mẽ (MSS/BOS ngược hướng sweep) trong vòng 20 nến kế tiếp.
-// Vùng OB của cây nến gây ra cú đảo chiều đó được đánh dấu là Breaker Block — hỗ trợ/kháng cự cực mạnh khi retest.
-//
-// Mitigation Block: cấu trúc bị phá vỡ theo hướng ngược xu hướng (MSS) nhưng KHÔNG có
-// một Liquidity Sweep của đúng đỉnh/đáy đó xảy ra trước — tức đỉnh/đáy thất bại trong việc quét
-// thanh khoản cũ mà vẫn khiến cấu trúc gãy → vùng OB tương ứng là Mitigation Block (risk giảm thiểu, thường yếu hơn Breaker).
-function findBreakerAndMitigation(klines, events){
-  const sweeps = events.filter(e=>e.type==='Liquidity Sweep');
-  const shifts = events.filter(e=>e.type==='MSS' || e.type==='BOS');
-  let breaker = null, mitigation = null;
-
-  if (sweeps.length){
-    const lastSweep = sweeps[sweeps.length-1];
-    const rev = shifts.find(e => e.index > lastSweep.index && e.index - lastSweep.index <= 20 && e.direction !== lastSweep.direction);
-    if (rev){
-      const ob = findOrderBlock(klines, rev.index, rev.direction);
-      if (ob) breaker = {...ob, direction: rev.direction, sweepPrice: lastSweep.price, eventIndex: rev.index};
-    }
-  }
-
-  const mssEvents = events.filter(e=>e.type==='MSS');
-  if (mssEvents.length){
-    const lastMSS = mssEvents[mssEvents.length-1];
-    const hadSweepBefore = sweeps.some(s => s.index < lastMSS.index && lastMSS.index - s.index <= 20 && s.direction === lastMSS.direction);
-    if (!hadSweepBefore){
-      const ob = findOrderBlock(klines, lastMSS.index, lastMSS.direction);
-      if (ob) mitigation = {...ob, direction: lastMSS.direction, eventIndex: lastMSS.index};
-    }
-  }
-  return { breaker, mitigation };
-}
-
-function findOrderBlock(klines, eventIndex, direction){
-  for (let i=eventIndex; i>=1; i--){
-    const o=parseFloat(klines[i][1]), c=parseFloat(klines[i][4]);
-    const h=parseFloat(klines[i][2]), l=parseFloat(klines[i][3]);
-    if ((direction==='up' && c<o) || (direction==='down' && c>o)){
-      const ny = nyPartsFromMs(parseFloat(klines[i][0]));
-      const sess = getSessionForMinuteOfDay(ny.minuteOfDay);
-      return {
-        index:i, top:h, bottom:l,
-        sessionLabel: sess ? sess.label : null,
-        outOfSession: !sess
-      };
-    }
-  }
-  return null;
-}
-
-function findFVGs(klines, lookback=ICT_LOOKBACK){
-  const fvgs = [];
-  const start = Math.max(2, klines.length-lookback);
-  for (let i=start; i<klines.length; i++){
-    const h1 = parseFloat(klines[i-2][2]), l1 = parseFloat(klines[i-2][3]);
-    const h3 = parseFloat(klines[i][2]), l3 = parseFloat(klines[i][3]);
-    if (l3 > h1){ fvgs.push({type:'bullish', top:l3, bottom:h1, index:i-1, confirmIndex:i}); }
-    else if (h3 < l1){ fvgs.push({type:'bearish', top:l1, bottom:h3, index:i-1, confirmIndex:i}); }
-  }
-  return fvgs.map(f=>{
-    let mitigated = false;
-    for (let j=f.index+2; j<klines.length; j++){
-      const h=parseFloat(klines[j][2]), l=parseFloat(klines[j][3]);
-      if (f.type==='bullish' && l <= f.top) { mitigated = true; break; }
-      if (f.type==='bearish' && h >= f.bottom) { mitigated = true; break; }
-    }
-    const ny = nyPartsFromMs(parseFloat(klines[f.confirmIndex][0]));
-    const sess = getSessionForMinuteOfDay(ny.minuteOfDay);
-    const sb = getSilverBulletForMinuteOfDay(ny.minuteOfDay);
-    return {
-      ...f, mitigated,
-      sessionLabel: sess ? sess.label : null,
-      outOfSession: !sess,
-      silverBullet: sb ? sb.label : null
-    };
-  }).filter(f=>!f.mitigated).slice(-4);
-}
-
-// Volume Imbalance: khoảng trống chỉ giữa giá Close nến trước và Open nến sau (không dùng High/Low như FVG)
-function findVolumeImbalances(klines, lookback=ICT_LOOKBACK, minGapPct=0.05){
-  const vis = [];
-  const start = Math.max(1, klines.length-lookback);
-  for (let i=start; i<klines.length; i++){
-    const prevClose = parseFloat(klines[i-1][4]);
-    const curOpen = parseFloat(klines[i][1]);
-    const gapPct = Math.abs(curOpen-prevClose)/prevClose*100;
-    if (gapPct < minGapPct) continue;
-    if (curOpen > prevClose) vis.push({type:'bullish', top:curOpen, bottom:prevClose, index:i});
-    else if (curOpen < prevClose) vis.push({type:'bearish', top:prevClose, bottom:curOpen, index:i});
-  }
-  return vis.map(v=>{
-    let mitigated = false;
-    for (let j=v.index+1; j<klines.length; j++){
-      const h=parseFloat(klines[j][2]), l=parseFloat(klines[j][3]);
-      if (v.type==='bullish' && l <= v.top) { mitigated = true; break; }
-      if (v.type==='bearish' && h >= v.bottom) { mitigated = true; break; }
-    }
-    return {...v, mitigated};
-  }).filter(v=>!v.mitigated).slice(-2);
-}
-
-function findLiquidityZones(klines, lookback=ICT_LOOKBACK, tolPct=0.12){
-  const start = Math.max(0, klines.length-lookback);
-  const highs = [], lows = [];
-  for (let i=start; i<klines.length; i++){
-    highs.push({index:i, price:parseFloat(klines[i][2])});
-    lows.push({index:i, price:parseFloat(klines[i][3])});
-  }
-  function cluster(points){
-    const clusters = [];
-    points.forEach(p=>{
-      const found = clusters.find(c=> Math.abs(c.price-p.price)/c.price*100 <= tolPct);
-      if (found){ found.points.push(p); found.price=(found.price*(found.points.length-1)+p.price)/found.points.length; }
-      else clusters.push({price:p.price, points:[p]});
-    });
-    return clusters.filter(c=>c.points.length>=2)
-      .sort((a,b)=> b.points[b.points.length-1].index - a.points[a.points.length-1].index);
-  }
-  const eqHighs = cluster(highs).slice(0,2);
-  const eqLows = cluster(lows).slice(0,2);
-
-  const lastCandles = klines.slice(-3);
-  function checkSwept(zonePrice, isHigh){
-    for (const k of lastCandles){
-      const h = parseFloat(k[2]), l = parseFloat(k[3]), c = parseFloat(k[4]);
-      if (isHigh && h > zonePrice*(1+tolPct/200) && c < zonePrice) return true;
-      if (!isHigh && l < zonePrice*(1-tolPct/200) && c > zonePrice) return true;
-    }
-    return false;
-  }
-  eqHighs.forEach(z=> z.swept = checkSwept(z.price, true));
-  eqLows.forEach(z=> z.swept = checkSwept(z.price, false));
-  return { eqHighs, eqLows };
-}
-
-// ATR (Average True Range) — dùng làm cơ sở đặt buffer cho SL thay vì % cố định của giá,
-// vì ATR phản ánh đúng biến động thực tế của thị trường ở khung entry tại thời điểm đó.
-function calcATR(klines, period=14){
-  if (!klines || klines.length < period+1) return null;
-  const trs = [];
-  for (let i=1;i<klines.length;i++){
-    const high = parseFloat(klines[i][2]), low = parseFloat(klines[i][3]);
-    const prevClose = parseFloat(klines[i-1][4]);
-    trs.push(Math.max(high-low, Math.abs(high-prevClose), Math.abs(low-prevClose)));
-  }
-  const lastTRs = trs.slice(-period);
-  return lastTRs.reduce((a,b)=>a+b,0)/lastTRs.length;
-}
-
-function premiumDiscount(klines, lookback=SWING_LOOKBACK){
-  const slice = klines.slice(-lookback);
-  const highs = slice.map(k=>parseFloat(k[2]));
-  const lows = slice.map(k=>parseFloat(k[3]));
-  const top = Math.max(...highs), bottom = Math.min(...lows);
-  const mid = (top+bottom)/2;
-  const last = parseFloat(klines[klines.length-1][4]);
-  const pct = (last-bottom)/(top-bottom)*100;
-  let zone = 'equilibrium';
-  if (pct >= 60) zone = 'premium';
-  else if (pct <= 40) zone = 'discount';
-  return { top, bottom, mid, last, pct, zone };
-}
-
-function analyzeTF_ICT(klines){
-  const swings = labelSwings(findSwings(klines));
-  // Chỉ xét các sự kiện cấu trúc (MSS/BOS/Sweep) và OB/FVG trong cửa sổ ICT_LOOKBACK gần nhất
-  const { events, trend } = findStructureEvents(klines, swings);
-  const lastUpEvent = [...events].reverse().find(e=>e.direction==='up' && e.type!=='Liquidity Sweep');
-  const lastDownEvent = [...events].reverse().find(e=>e.direction==='down' && e.type!=='Liquidity Sweep');
-  const bullOB = lastUpEvent ? findOrderBlock(klines, lastUpEvent.index, 'up') : null;
-  const bearOB = lastDownEvent ? findOrderBlock(klines, lastDownEvent.index, 'down') : null;
-  const fvgs = findFVGs(klines);
-  const volumeImbalances = findVolumeImbalances(klines);
-  const liquidity = findLiquidityZones(klines);
-  const pd = premiumDiscount(klines);
-  const recentSwings = swings.slice(-4);
-  const lastEvent = events.length ? events[events.length-1] : null;
-  const lastClose = parseFloat(klines[klines.length-1][4]);
-  const { breaker, mitigation } = findBreakerAndMitigation(klines, events);
-
-  // FVG nào rơi đúng vào khung Silver Bullet
-  const silverBulletFVGs = fvgs.filter(f => f.silverBullet);
-
-  // Phiên NY của cây nến gần nhất (để hiển thị trạng thái phiên hiện tại của khung này)
-  const lastNy = nyPartsFromMs(parseFloat(klines[klines.length-1][0]));
-  const lastSession = getSessionForMinuteOfDay(lastNy.minuteOfDay);
-
-  const atr14 = calcATR(klines, 14);
-
-  return { trend, lastEvent, events, bullOB, bearOB, fvgs, volumeImbalances, liquidity, pd,
-    recentSwings, lastClose, breaker, mitigation, silverBulletFVGs, lastSession, atr14 };
-}
-
-function trendLabelICT(t){
-  if (t==="up") return "TĂNG";
-  if (t==="down") return "GIẢM";
-  return "CHƯA RÕ";
-}
-
-// Tính khoảng giá cụ thể của vùng Premium/Discount/Equilibrium dựa trên range đã xác định
-function pdZoneRange(pd, zone){
-  const range = pd.top - pd.bottom;
-  if (zone === 'discount') return { low: pd.bottom, high: pd.bottom + range*0.4 };
-  if (zone === 'premium') return { low: pd.bottom + range*0.6, high: pd.top };
-  return { low: pd.bottom + range*0.4, high: pd.bottom + range*0.6 };
-}
-
-// Xây dựng gợi ý entry ICT kèm mức giá cụ thể (OB/FVG ở khung nhỏ nhất + vùng Premium/Discount ở khung lớn hơn)
-function buildICTEntryNote(direction, entryTF, entryA, biggerTF, biggerA){
-  const isUp = direction === 'up';
-  const ob = isUp ? entryA.bullOB : entryA.bearOB;
-  const fvg = entryA.fvgs.find(f => f.type === (isUp ? 'bullish' : 'bearish'));
-  const zone = isUp ? 'discount' : 'premium';
-  const zoneLabelVN = isUp ? 'discount (giá rẻ)' : 'premium (giá đắt)';
-  const zr = pdZoneRange(biggerA.pd, zone);
-
-  const parts = [];
-  if (ob) parts.push(`Order Block ${isUp?'Tăng':'Giảm'} tại ${fmtNum(ob.bottom)} – ${fmtNum(ob.top)} (khung ${entryTF.label})${ob.outOfSession?' ❌ hình thành ngoài Killzone (Low Probability)':''}`);
-  if (fvg) parts.push(`FVG ${isUp?'Tăng':'Giảm'} tại ${fmtNum(fvg.bottom)} – ${fmtNum(fvg.top)} (khung ${entryTF.label})${fvg.outOfSession?' ❌ hình thành ngoài Killzone (Low Probability)':(fvg.silverBullet?` 🎯 (${fvg.silverBullet})`:'')}`);
-  if (!ob && !fvg) parts.push(`chưa có Order Block/FVG ${isUp?'tăng':'giảm'} rõ ràng ở khung ${entryTF.label}, cần chờ cấu trúc mới hình thành`);
-
-  const zoneText = `vùng ${zoneLabelVN} của khung ${biggerTF.label}: ${fmtNum(zr.low)} – ${fmtNum(zr.high)}`;
-
-  return `Vùng entry tham khảo: ${parts.join(' hoặc ')}, ưu tiên khi giá nằm trong ${zoneText}.`;
-}
-
-// Mô hình PO3 (Power of Three / IPDA): Accumulation → Manipulation (Judas Swing) → Distribution,
-// đối chiếu giá hiện tại với giá Mở cửa ngày (Open_Daily, tính theo mốc 00:00 giờ New York).
-// Chỉ đưa ra gợi ý LỆNH THỰC SỰ (Entry/SL/TP) khi hội đủ điều kiện:
-//  1) Có vùng OB hoặc FVG entry ở khung nhỏ nhất VÀ hình thành TRONG phiên/Killzone (không phải Low Probability).
-//  2) Cấu trúc gần nhất là MSS hoặc BOS đúng hướng lệnh (không phải Liquidity Sweep — vì sweep chưa xác nhận gì).
-//  3) Tỷ lệ RR (Reward:Risk) đạt tối thiểu 1:1. TP1 ưu tiên thanh khoản CHƯA bị quét gần nhất ở khung entry/khung
-//     giữa (thực tế, khả thi hơn); TP2 nhắm thanh khoản chưa quét xa hơn ở khung lớn nhất — khi giá đạt TP1,
-//     dịch SL về entry (breakeven) và gồng phần còn lại tới TP2.
-// LƯU Ý QUAN TRỌNG: khi entry là lệnh CHỜ (Order Block/FVG nằm cách xa giá hiện tại), phần "Reward" hiển thị
-// bao gồm CẢ đoạn giá phải hồi về entry (chưa xảy ra) LẪN đoạn tiếp diễn sau đó — RR vì vậy có thể trông rất lớn
-// dù không phản ánh xác suất thắng thực tế. Khi RR vượt ngưỡng bất thường, hệ thống gắn cờ cảnh báo rrWarning.
-// Nếu không hội đủ điều kiện, KHÔNG đưa ra Entry/SL/TP — chỉ giải thích lý do để tránh gợi ý lệnh ngoài giờ/kém xác suất.
-const MIN_RR = 1;            // RR tối thiểu chấp nhận cho TP1
-const ATR_SL_MULT = 0.35;    // hệ số nhân ATR cho buffer SL (khuyến nghị ICT: 0.25 - 0.5x ATR khung entry)
-const SL_MIN_PCT = 0.0015;   // sàn buffer tối thiểu = 0.15% giá, tránh SL quá sát khi ATR/zone quá nhỏ
-const RR_WARN_THRESHOLD = 10; // RR vượt mức này => cảnh báo bất thường, không nên tin tuyệt đối vào con số
-
-function nearestUnswept(zones, entry, isUp){
-  return zones.filter(z=>!z.swept && (isUp ? z.price>entry : z.price<entry))
-    .map(z=>z.price)
-    .sort((a,b)=> isUp ? a-b : b-a);
-}
-
-function buildTradeSetup(direction, entryTF, entryA, midA, biggerA){
-  const isUp = direction === 'up';
-  const ob = isUp ? entryA.bullOB : entryA.bearOB;
-  const fvg = entryA.fvgs.find(f => f.type === (isUp ? 'bullish' : 'bearish'));
-
-  let primary = null, source = null;
-  if (ob && !ob.outOfSession) { primary = ob; source = 'Order Block'; }
-  else if (fvg && !fvg.outOfSession) { primary = fvg; source = 'FVG'; }
-  if (!primary) return { ok:false, reason:'no_zone_in_session' };
-
-  const ev = entryA.lastEvent;
-  if (!ev || ev.type === 'Liquidity Sweep' || ev.direction !== direction){
-    return { ok:false, reason:'no_structure_confirm' };
-  }
-
-  // SL = đỉnh/đáy wick (điểm vô hiệu hóa cấu trúc OB/FVG) ± buffer theo ATR khung entry,
-  // có sàn tối thiểu theo % giá để tránh SL quá sát khi ATR hoặc zone quá nhỏ (dễ bị quét bởi nhiễu giá).
-  const zoneHeight = Math.abs(primary.top - primary.bottom);
-  const atrBuffer = entryA.atr14 ? entryA.atr14*ATR_SL_MULT : zoneHeight*0.15;
-  const buffer = Math.max(atrBuffer, entryA.lastClose*SL_MIN_PCT);
-
-  let entry, sl;
-  if (isUp){ entry = primary.top; sl = primary.bottom - buffer; }
-  else { entry = primary.bottom; sl = primary.top + buffer; }
-
-  // TP1: thanh khoản CHƯA quét gần nhất, ưu tiên khung entry rồi khung giữa (thực tế, khả thi hơn).
-  // TP2: thanh khoản CHƯA quét xa hơn (khung giữa/khung lớn) — mục tiêu "gồng lãi" sau khi dời SL về breakeven.
-  const nearZones = isUp
-    ? [...nearestUnswept(entryA.liquidity.eqHighs, entry, true), ...nearestUnswept(midA.liquidity.eqHighs, entry, true)]
-    : [...nearestUnswept(entryA.liquidity.eqLows, entry, false), ...nearestUnswept(midA.liquidity.eqLows, entry, false)];
-  const farZones = nearestUnswept(isUp ? biggerA.liquidity.eqHighs : biggerA.liquidity.eqLows, entry, isUp);
-
-  let tp = nearZones.length ? nearZones[0] : (isUp ? midA.pd.top : midA.pd.bottom);
-  if (isUp && tp<=entry) tp = biggerA.pd.top;
-  if (!isUp && tp>=entry) tp = biggerA.pd.bottom;
-
-  let tp2Candidates = [...nearZones, ...farZones].filter(p => isUp ? p>tp : p<tp);
-  tp2Candidates = tp2Candidates.sort((a,b)=> isUp ? a-b : b-a);
-  let tp2 = tp2Candidates.length ? tp2Candidates[0] : (isUp ? biggerA.pd.top : biggerA.pd.bottom);
-  if (isUp && tp2<=tp) tp2 = biggerA.pd.top;
-  if (!isUp && tp2>=tp) tp2 = biggerA.pd.bottom;
-
-  const risk = Math.abs(entry-sl);
-  if (risk <= 0) return { ok:false, reason:'invalid_risk' };
-  let reward = Math.abs(tp-entry);
-  let rr = reward/risk;
-
-  if (rr < MIN_RR){
-    tp = isUp ? Math.max(tp, biggerA.pd.top) : Math.min(tp, biggerA.pd.bottom);
-    reward = Math.abs(tp-entry);
-    rr = reward/risk;
-    // TP2 phải luôn xa hơn TP1 sau khi TP1 được nới ra theo pd bound
-    tp2 = isUp ? Math.max(tp2, tp) : Math.min(tp2, tp);
-  }
-  if (rr < MIN_RR) return { ok:false, reason:'rr_below_min' };
-
-  const reward2 = Math.abs(tp2-entry);
-  const rr2 = reward2/risk;
-  const rrWarning = rr > RR_WARN_THRESHOLD;
-  // % khoảng cách giá phải di chuyển để chạm entry (áp dụng khi entry là lệnh chờ, nằm xa giá hiện tại)
-  const pullbackPct = Math.abs(entry-entryA.lastClose)/entryA.lastClose*100;
-
-  // Điểm hợp lưu ước tính (heuristic dựa trên số điều kiện ICT thỏa mãn — KHÔNG phải xác suất
-  // thắng thống kê thực tế, không hồi kiểm dữ liệu lịch sử). Dùng để xếp hạng độ tin cậy tương đối.
-  let score = 50;
-  if (ev.type === 'MSS') score += 15; else score += 5;
-  if (source === 'Order Block') score += 5;
-  if (primary.silverBullet) score += 10;
-  if (primary.sessionLabel) score += 5;
-  const sweptOppositeSide = isUp ? biggerA.liquidity.eqLows.some(z=>z.swept) : biggerA.liquidity.eqHighs.some(z=>z.swept);
-  if (sweptOppositeSide) score += 10;
-  if (rr >= 3 && !rrWarning) score += 5;
-  score = Math.min(88, score);
-
-  return { ok:true, direction, source, entry, sl, tp, tp2, risk, reward, rr, reward2, rr2, rrWarning, pullbackPct, score, primary, event:ev };
-}
-
-const NO_TRADE_REASONS = {
-  no_zone_in_session: 'Chưa có Order Block/FVG entry nào hình thành trong phiên/Killzone hiện tại ở khung nhỏ nhất — mọi vùng hiện có đều ❌ Ngoài phiên giao dịch (Low Probability).',
-  no_structure_confirm: 'Cấu trúc gần nhất chỉ là Liquidity Sweep (quét thanh khoản) hoặc chưa cùng hướng — chưa có MSS/BOS xác nhận thật sự.',
-  rr_below_min: `Có vùng entry hợp lệ nhưng khoảng cách tới thanh khoản mục tiêu không đủ để đạt tỷ lệ RR tối thiểu ${MIN_RR}:1.`,
-  invalid_risk: 'Không xác định được vùng SL hợp lệ (vùng entry quá hẹp/không rõ ràng).',
-  mixed_trend: 'Cấu trúc giữa các khung đang mâu thuẫn — chưa đủ điều kiện đồng thuận để vào lệnh.'
-};
-
-function buildTradeHtml(setup, entryTF){
-  if (!setup || !setup.ok){
-    const reason = setup ? NO_TRADE_REASONS[setup.reason] : NO_TRADE_REASONS.mixed_trend;
-    return `
-      <div class="trade-box none">
-        <div class="stitle">Gợi ý lệnh (Entry / TP / SL)</div>
-        <div class="empty-note">🚫 Chưa đủ điều kiện vào lệnh lúc này. ${reason} Nên đứng ngoài quan sát.</div>
-      </div>`;
-  }
-  const isUp = setup.direction === 'up';
-  const dirLabel = isUp ? 'LONG (MUA)' : 'SHORT (BÁN)';
-  const dirCls = isUp ? 'long' : 'short';
-  const pullbackNote = setup.pullbackPct >= 0.5
-    ? `<div class="trade-meta">⚠️ Entry là lệnh CHỜ, cách giá hiện tại ~<b>${setup.pullbackPct.toFixed(2)}%</b> — giá cần hồi về vùng này trước khi lệnh khớp. Phần "Reward" trong RR bên dưới bao gồm cả quãng hồi giá này (chưa xảy ra), không chỉ là lợi nhuận thuần sau khi khớp lệnh.</div>`
-    : '';
-  const rrWarningNote = setup.rrWarning
-    ? `<div class="trade-meta warn">🚩 RR đang ở mức bất thường cao (>${RR_WARN_THRESHOLD}:1) — thường do SL cấu trúc quá sát và/hoặc entry cách xa giá hiện tại. Đây KHÔNG phải xác suất thắng, tuyệt đối không tăng khối lượng vào lệnh chỉ vì con số RR lớn.</div>`
-    : '';
-  return `
-    <div class="trade-box ${dirCls}">
-      <div class="stitle">Gợi ý lệnh (Entry / TP / SL)</div>
-      <div class="trade-header ${dirCls}">✅ ${dirLabel} — nguồn: ${setup.source}${setup.primary.silverBullet?` (🎯 ${setup.primary.silverBullet})`:''}</div>
-      <div class="trade-line entry"><span class="tl-label">Entry</span><span class="tl-value">${fmtNum(setup.entry)}</span></div>
-      <div class="trade-line tp"><span class="tl-label">TP1 (~${setup.score}% hợp lưu)</span><span class="tl-value">${fmtNum(setup.tp)}</span></div>
-      <div class="trade-line tp"><span class="tl-label">TP2 (thanh khoản xa hơn)</span><span class="tl-value">${fmtNum(setup.tp2)}</span></div>
-      <div class="trade-line sl"><span class="tl-label">SL</span><span class="tl-value">${fmtNum(setup.sl)}</span></div>
-      <div class="trade-meta">RR TP1 ≈ <b>1 : ${setup.rr.toFixed(2)}</b> (tối thiểu ${MIN_RR}:1) — RR TP2 ≈ <b>1 : ${setup.rr2.toFixed(2)}</b>. Gợi ý quản trị: khi giá đạt TP1, dời SL về Entry (breakeven) rồi gồng phần vị thế còn lại hướng tới TP2. SL đặt tại đỉnh/đáy wick vô hiệu hóa vùng ${setup.source} ± buffer ~${ATR_SL_MULT}×ATR (sàn tối thiểu ${(SL_MIN_PCT*100).toFixed(2)}% giá) khung ${entryTF.label}. ${setup.event.type==='MSS'?'Xác nhận bằng MSS (đảo chiều hợp lệ, có FVG kèm theo).':'Xác nhận bằng BOS (tiếp diễn xu hướng).'} % hợp lưu là điểm ước tính dựa trên số điều kiện ICT thỏa mãn (phiên, MSS, Silver Bullet, sweep đối ứng...), <b>không phải xác suất thắng thống kê thực tế</b> — luôn tự quản trị rủi ro.</div>
-      ${pullbackNote}
-      ${rrWarningNote}
-    </div>`;
-}
-
-function buildPO3Html(dailyOpenInfo, lastClose){
-  if (!dailyOpenInfo){
-    return `<div class="po3-box"><div class="stitle">PO3 / IPDA — Daily Open (giờ NY)</div><div class="empty-note">Không lấy được giá mở cửa ngày (Open_Daily) từ Binance, bỏ qua bước phân tích PO3.</div></div>`;
-  }
-  const open = dailyOpenInfo.open;
-  const above = lastClose > open;
-  const diffPct = ((lastClose-open)/open*100);
-  const biasClass = above ? 'bias-up' : 'bias-down';
-  const posLabel = above ? 'TRÊN giá mở cửa ngày (vùng Premium so với Open)' : 'DƯỚI giá mở cửa ngày (vùng Discount so với Open)';
-  const guidance = above
-    ? 'Theo PO3: nếu muốn BÁN (Short), nên ưu tiên tìm entry khi giá đang ở vùng Premium (trên Open_Daily) sau khi có dấu hiệu thao túng (Judas Swing) đạp lên rồi đảo chiều. Muốn MUA (Long) nên chờ giá chiết khấu về dưới Open_Daily.'
-    : 'Theo PO3: nếu muốn MUA (Long), nên ưu tiên tìm entry khi giá đang ở vùng Discount (dưới Open_Daily) — đây là vùng giá đã bị thao túng (Judas Swing) đạp xuống trước khi đẩy giá lên. Muốn BÁN (Short) nên chờ giá hồi lên trên Open_Daily.';
-  return `
-    <div class="po3-box">
-      <div class="stitle">PO3 / IPDA — Accumulation → Manipulation → Distribution</div>
-      <div class="po3-row">Giá mở cửa ngày (Open_Daily, 00:00 giờ NY): <b>${fmtNum(open)}</b></div>
-      <div class="po3-row ${biasClass}">Giá hiện tại <b>${fmtNum(lastClose)}</b> đang nằm <b>${posLabel}</b> (${above?'+':''}${diffPct.toFixed(2)}%)</div>
-      <div class="po3-row">${guidance}</div>
-    </div>`;
-}
-
-function eventBadgeHtml(ev){
-  if (!ev) return '';
-  const dir = ev.direction==='up' ? '↑' : '↓';
-  if (ev.type==='MSS') return `<span class="badge mss">MSS ${dir} (đảo chiều, có FVG)</span>`;
-  if (ev.type==='BOS') return `<span class="badge bos">BOS ${dir} (tiếp diễn)</span>`;
-  if (ev.type==='Liquidity Sweep') return `<span class="badge sweep">Liquidity Sweep ${dir} (quét TK, xu hướng cũ giữ nguyên)</span>`;
-  return `<span class="badge event">${ev.type} ${dir}</span>`;
-}
-
-function sessionTagHtml(item){
-  if (!item) return '';
-  if (item.outOfSession) return ` <span class="tag lowprob">❌ Ngoài phiên giao dịch (Low Probability)</span>`;
-  if (item.silverBullet) return ` <span class="tag silver">🎯 ${item.silverBullet}</span>`;
-  if (item.sessionLabel) return ` <span class="tag insession">✔ ${item.sessionLabel}</span>`;
-  return '';
-}
-
-function renderICT(results, tfs, dailyOpenInfo){
-  const trends = results.map(r=>r.analysis.trend);
-  const upCount = trends.filter(t=>t==="up").length;
-  const downCount = trends.filter(t=>t==="down").length;
-
-  // Khung nhỏ nhất dùng để tìm điểm entry (OB/FVG), khung giữa hỗ trợ tìm TP1 gần thực tế,
-  // khung lớn nhất dùng để xác định vùng Premium/Discount và TP2 (thanh khoản xa hơn).
-  const entryTF = tfs[tfs.length-1], entryA = results[results.length-1].analysis;
-  const midTF = tfs[1], midA = results[1].analysis;
-  const biggerTF = tfs[0], biggerA = results[0].analysis;
-
-  let confClass, verdictClass, verdictText, note, tradeSetup;
-  if (upCount === trends.length){
-    confClass="bull"; verdictClass="up"; verdictText="CẤU TRÚC ĐỒNG THUẬN TĂNG TRÊN CẢ 3 KHUNG";
-    note="Cấu trúc thẳng hàng theo hướng tăng trên cả 3 khung (xác nhận bằng MSS/BOS thật, không phải Liquidity Sweep) — điều kiện thuận lợi hơn cho lệnh mua theo xu hướng. " + buildICTEntryNote('up', entryTF, entryA, biggerTF, biggerA);
-    tradeSetup = buildTradeSetup('up', entryTF, entryA, midA, biggerA);
-  } else if (downCount === trends.length){
-    confClass="bear"; verdictClass="down"; verdictText="CẤU TRÚC ĐỒNG THUẬN GIẢM TRÊN CẢ 3 KHUNG";
-    note="Cấu trúc thẳng hàng theo hướng giảm trên cả 3 khung (xác nhận bằng MSS/BOS thật, không phải Liquidity Sweep) — điều kiện thuận lợi hơn cho lệnh bán theo xu hướng. " + buildICTEntryNote('down', entryTF, entryA, biggerTF, biggerA);
-    tradeSetup = buildTradeSetup('down', entryTF, entryA, midA, biggerA);
-  } else {
-    confClass="mixed"; verdictClass="flat"; verdictText="CẤU TRÚC MÂU THUẪN GIỮA CÁC KHUNG";
-    note="Khung lớn và khung nhỏ chưa đồng thuận xu hướng — rủi ro tín hiệu giả cao, nên chờ MSS (phá cấu trúc kèm FVG) xác nhận rõ ràng hơn trước khi vào lệnh, và tránh nhầm Liquidity Sweep với đảo chiều thật.";
-    tradeSetup = { ok:false, reason:'mixed_trend' };
-  }
-
-  const confluenceHtml = `
-    <div class="confluence ${confClass}">
-      <div class="title">Hợp lưu cấu trúc ICT Concept — ${tfs.map(t=>t.label).join(' / ')}</div>
-      <div class="verdict ${verdictClass}">${verdictText}</div>
-      <div class="note">${note}</div>
-    </div>
-    ${buildTradeHtml(tradeSetup, entryTF)}
-    ${buildPO3Html(dailyOpenInfo, entryA.lastClose)}`;
-
-  const cardsHtml = results.map(r=>{
-    const a = r.analysis;
-    const structPath = a.recentSwings.map(s=>s.label).join(' → ') || 'chưa đủ dữ liệu';
-    const eventBadge = eventBadgeHtml(a.lastEvent);
-    const sessBadge = `<span class="badge ${a.lastSession?'event':'flat'}">${a.lastSession ? a.lastSession.label : 'Ngoài Killzone'}</span>`;
-
-    const obHtml = `
-      <div class="section">
-        <div class="stitle">Order Block</div>
-        ${a.bullOB ? `<div class="row-line bullish ${a.bullOB.outOfSession?'lowprob':''}"><span>OB Tăng (chờ mua)${sessionTagHtml(a.bullOB)}</span><span class="zone">${fmtNum(a.bullOB.bottom)} – ${fmtNum(a.bullOB.top)}</span></div>` : ''}
-        ${a.bearOB ? `<div class="row-line bearish ${a.bearOB.outOfSession?'lowprob':''}"><span>OB Giảm (chờ bán)${sessionTagHtml(a.bearOB)}</span><span class="zone">${fmtNum(a.bearOB.bottom)} – ${fmtNum(a.bearOB.top)}</span></div>` : ''}
-        ${(!a.bullOB && !a.bearOB) ? '<div class="empty-note">Chưa xác định được Order Block rõ ràng trong dữ liệu hiện có.</div>' : ''}
-      </div>`;
-
-    const fvgHtml = `
-      <div class="section">
-        <div class="stitle">Fair Value Gap (chưa lấp)</div>
-        ${a.fvgs.length ? a.fvgs.map(f=>`<div class="row-line ${f.type} ${f.outOfSession?'lowprob':''}"><span>FVG ${f.type==='bullish'?'Tăng':'Giảm'}${sessionTagHtml(f)}</span><span class="zone">${fmtNum(f.bottom)} – ${fmtNum(f.top)}</span></div>`).join('') : '<div class="empty-note">Không có FVG chưa lấp đáng chú ý gần đây.</div>'}
-      </div>`;
-
-    const sbFvgs = a.silverBulletFVGs || [];
-    const silverBulletHtml = `
-      <div class="section">
-        <div class="stitle">🎯 Silver Bullet Entry (FVG hình thành trong khung 1 giờ Silver Bullet)</div>
-        ${sbFvgs.length ? sbFvgs.map(f=>`<div class="row-line silverbullet ${f.type}"><span>FVG ${f.type==='bullish'?'Tăng':'Giảm'} — ${f.silverBullet}</span><span class="zone">${fmtNum(f.bottom)} – ${fmtNum(f.top)}</span></div>`).join('') : '<div class="empty-note">Không có FVG nào hình thành trong khung London 03–04h / NY AM 10–11h / NY PM 14–15h (giờ NY) gần đây.</div>'}
-      </div>`;
-
-    const bmHtml = (a.breaker || a.mitigation) ? `
-      <div class="section">
-        <div class="stitle">Breaker Block / Mitigation Block</div>
-        ${a.breaker ? `<div class="row-line breaker"><span>Breaker Block ${a.breaker.direction==='up'?'Tăng (hỗ trợ mạnh)':'Giảm (kháng cự mạnh)'}${sessionTagHtml(a.breaker)}</span><span class="zone">${fmtNum(a.breaker.bottom)} – ${fmtNum(a.breaker.top)}</span></div>` : ''}
-        ${a.mitigation ? `<div class="row-line mitigation"><span>Mitigation Block ${a.mitigation.direction==='up'?'Tăng':'Giảm'}${sessionTagHtml(a.mitigation)}</span><span class="zone">${fmtNum(a.mitigation.bottom)} – ${fmtNum(a.mitigation.top)}</span></div>` : ''}
-      </div>` : '';
-
-    const viHtml = `
-      <div class="section">
-        <div class="stitle">Volume Imbalance (khoảng trống Close→Open)</div>
-        ${a.volumeImbalances.length ? a.volumeImbalances.map(v=>`<div class="row-line vi ${v.type}"><span>VI ${v.type==='bullish'?'Tăng':'Giảm'}</span><span class="zone">${fmtNum(v.bottom)} – ${fmtNum(v.top)}</span></div>`).join('') : '<div class="empty-note">Không có Volume Imbalance đáng chú ý gần đây.</div>'}
-      </div>`;
-
-    const liqHtml = `
-      <div class="section">
-        <div class="stitle">Vùng thanh khoản</div>
-        ${a.liquidity.eqHighs.map(z=>`<div class="row-line bearish ${z.swept?'swept':''}"><span>Equal Highs ${z.swept?'<span class=\"tag\">(đã quét)</span>':''}</span><span class="zone">${fmtNum(z.price)}</span></div>`).join('')}
-        ${a.liquidity.eqLows.map(z=>`<div class="row-line bullish ${z.swept?'swept':''}"><span>Equal Lows ${z.swept?'<span class=\"tag\">(đã quét)</span>':''}</span><span class="zone">${fmtNum(z.price)}</span></div>`).join('')}
-        ${(!a.liquidity.eqHighs.length && !a.liquidity.eqLows.length) ? '<div class="empty-note">Chưa phát hiện vùng đỉnh/đáy bằng nhau rõ ràng.</div>' : ''}
-      </div>`;
-
-    const pdPct = Math.min(100, Math.max(0, a.pd.pct));
-    const pdZoneLabel = a.pd.zone === 'premium' ? 'PREMIUM (vùng đắt)' : a.pd.zone === 'discount' ? 'DISCOUNT (vùng rẻ)' : 'EQUILIBRIUM (cân bằng)';
-    const pdHtml = `
-      <div class="section">
-        <div class="stitle">Premium / Discount (range ${SWING_LOOKBACK} nến)</div>
-        <div class="row-line"><span>Vùng hiện tại</span><span class="zone">${pdZoneLabel}</span></div>
-        <div class="pd-bar"><div class="pd-marker" style="left:${pdPct}%"></div></div>
-        <div class="pd-labels"><span>Discount ${fmtNum(a.pd.bottom)}</span><span>50% ${fmtNum(a.pd.mid)}</span><span>Premium ${fmtNum(a.pd.top)}</span></div>
-      </div>`;
-
-    return `
-      <div class="tf-card">
-        <div class="tf-head">
-          <div class="tf-name">${r.tf.label} — Giá: ${fmtNum(a.lastClose)}</div>
-          <div>
-            <span class="badge ${a.trend||'flat'}">${trendLabelICT(a.trend)}</span>
-            ${eventBadge}
-            ${sessBadge}
-          </div>
-        </div>
-        <div class="structure-path">Cấu trúc gần đây: <b>${structPath}</b></div>
-        ${obHtml}
-        ${fvgHtml}
-        ${silverBulletHtml}
-        ${bmHtml}
-        ${viHtml}
-        ${liqHtml}
-        ${pdHtml}
-      </div>`;
-  }).join('');
-
-  return { confluenceHtml, cardsHtml, verdictText, note, tradeSetup };
-}
-
-function buildAnalysisTextICT(){
-  if (!lastAnalysis) return "";
-  const now = new Date().toLocaleString('vi-VN');
-  let lines = [];
-  lines.push(`Phân tích ICT Concept ${lastAnalysis.symbol} — ${lastAnalysis.tfs.map(t=>t.label).join('/')} — ${now}`);
-  lines.push(`Hợp lưu: ${lastAnalysis.verdictText}`);
-  lines.push(lastAnalysis.note);
-  const ts = lastAnalysis.tradeSetup;
-  if (ts && ts.ok){
-    lines.push("");
-    lines.push(`>>> GỢI Ý LỆNH: ${ts.direction==='up'?'LONG (MUA)':'SHORT (BÁN)'} — nguồn: ${ts.source}${ts.primary.silverBullet?` (${ts.primary.silverBullet})`:''}`);
-    lines.push(`Entry: ${fmtNum(ts.entry)}`);
-    lines.push(`TP1: ${fmtNum(ts.tp)} (~${ts.score}% hợp lưu) — RR 1:${ts.rr.toFixed(2)} (tối thiểu ${MIN_RR}:1)`);
-    lines.push(`TP2: ${fmtNum(ts.tp2)} (thanh khoản xa hơn) — RR 1:${ts.rr2.toFixed(2)}`);
-    lines.push(`SL: ${fmtNum(ts.sl)} (đặt tại đỉnh/đáy vô hiệu hóa ± ${ATR_SL_MULT}×ATR, sàn tối thiểu ${(SL_MIN_PCT*100).toFixed(2)}% giá)`);
-    lines.push(`Quản trị: đạt TP1 → dời SL về Entry (breakeven), gồng phần còn lại tới TP2.`);
-    if (ts.pullbackPct >= 0.5) lines.push(`⚠️ Entry cách giá hiện tại ~${ts.pullbackPct.toFixed(2)}% (lệnh chờ) — RR trên bao gồm cả quãng hồi giá về entry, chưa phải lợi nhuận thuần.`);
-    if (ts.rrWarning) lines.push(`🚩 RR bất thường cao (>${RR_WARN_THRESHOLD}:1) — không phản ánh xác suất thắng, không tăng khối lượng chỉ vì RR lớn.`);
-  } else {
-    lines.push("");
-    lines.push(`>>> Chưa đủ điều kiện vào lệnh: ${NO_TRADE_REASONS[(ts&&ts.reason)||'mixed_trend']}`);
-  }
-  if (lastAnalysis.dailyOpenInfo){
-    const open = lastAnalysis.dailyOpenInfo.open;
-    const lastA = lastAnalysis.results[lastAnalysis.results.length-1].analysis;
-    const above = lastA.lastClose > open;
-    lines.push(`PO3/IPDA — Open_Daily (00:00 NY): ${fmtNum(open)} | Giá hiện tại đang ở ${above?'TRÊN (Premium so với Open)':'DƯỚI (Discount so với Open)'} Open_Daily`);
-  }
-  lines.push("");
-  lastAnalysis.results.forEach(r=>{
-    const a = r.analysis;
-    lines.push(`===== ${r.tf.label} | Giá: ${fmtNum(a.lastClose)} | Xu hướng: ${trendLabelICT(a.trend)} | Phiên NY: ${a.lastSession?a.lastSession.label:'Ngoài Killzone'} =====`);
-    lines.push(`Cấu trúc gần đây: ${a.recentSwings.map(s=>s.label).join(' -> ')||'—'}`);
-    if (a.lastEvent) lines.push(`Sự kiện gần nhất: ${a.lastEvent.type} ${a.lastEvent.direction==='up'?'(tăng)':'(giảm)'} tại ${fmtNum(a.lastEvent.price)}${a.lastEvent.type==='MSS'?' [đảo chiều hợp lệ, có FVG kèm theo]':a.lastEvent.type==='Liquidity Sweep'?' [chỉ là quét thanh khoản, xu hướng cũ chưa đổi]':''}`);
-    if (a.bullOB) lines.push(`Order Block Tăng: ${fmtNum(a.bullOB.bottom)} - ${fmtNum(a.bullOB.top)}${a.bullOB.outOfSession?' ❌ Ngoài phiên giao dịch (Low Probability)':''}`);
-    if (a.bearOB) lines.push(`Order Block Giảm: ${fmtNum(a.bearOB.bottom)} - ${fmtNum(a.bearOB.top)}${a.bearOB.outOfSession?' ❌ Ngoài phiên giao dịch (Low Probability)':''}`);
-    if (a.breaker) lines.push(`Breaker Block ${a.breaker.direction==='up'?'Tăng':'Giảm'}: ${fmtNum(a.breaker.bottom)} - ${fmtNum(a.breaker.top)}`);
-    if (a.mitigation) lines.push(`Mitigation Block ${a.mitigation.direction==='up'?'Tăng':'Giảm'}: ${fmtNum(a.mitigation.bottom)} - ${fmtNum(a.mitigation.top)}`);
-    a.fvgs.forEach(f=> lines.push(`FVG ${f.type==='bullish'?'Tăng':'Giảm'} (chưa lấp): ${fmtNum(f.bottom)} - ${fmtNum(f.top)}${f.outOfSession?' ❌ Ngoài phiên giao dịch (Low Probability)':f.silverBullet?` 🎯 ${f.silverBullet}`:''}`));
-    a.volumeImbalances.forEach(v=> lines.push(`Volume Imbalance ${v.type==='bullish'?'Tăng':'Giảm'}: ${fmtNum(v.bottom)} - ${fmtNum(v.top)}`));
-    a.liquidity.eqHighs.forEach(z=> lines.push(`Equal Highs: ${fmtNum(z.price)}${z.swept?' (đã quét)':''}`));
-    a.liquidity.eqLows.forEach(z=> lines.push(`Equal Lows: ${fmtNum(z.price)}${z.swept?' (đã quét)':''}`));
-    lines.push(`Premium/Discount: ${a.pd.zone.toUpperCase()} (${a.pd.pct.toFixed(0)}% của range ${fmtNum(a.pd.bottom)}-${fmtNum(a.pd.top)})`);
-    lines.push("");
-  });
-  return lines.join('\n');
-}
-
-// ================== ĐIỀU PHỐI CHUNG ==================
 
 async function lookup(rawInput){
-  const raw = rawInput !== undefined ? rawInput : input.value;
-  if (!raw || !raw.trim()) return;
-  const methodLabel = currentMethod === 'ict' ? 'cấu trúc ICT Concept' : 'EMA/RSI/Price Action';
-  content.innerHTML = `<div class="state">Đang tải và phân tích ${methodLabel} cho ${raw.toUpperCase()}...</div>`;
+  content.innerHTML = '<div class="state">Đang tra cứu...</div>';
+  try{
+    const symbol = await resolveSymbol(rawInput);
+    const tfs = TF_SETS[currentSet];
 
-  let symbol;
-  try {
-    symbol = await resolveSymbol(raw);
-  } catch(e) {
-    content.innerHTML = `<div class="state err">Không tìm thấy cặp giao dịch cho "${raw.toUpperCase()}". Thử ví dụ: BTC, ETH, SOLUSDT...</div>`;
-    return;
-  }
-
-  const tfs = TF_SETS[currentSet];
-  const copyLabel = currentMethod === 'ict' ? 'Copy phân tích ICT Concept để gửi vào chat' : 'Copy phân tích EMA/RSI/PA để gửi vào chat';
-
-  try {
-    let results, dailyOpenInfo = null;
-
-    if (currentMethod === 'ict'){
-      [results, dailyOpenInfo] = await Promise.all([
-        Promise.all(tfs.map(async tf => {
-          const res = await fetchWithFallback(`/api/v3/klines?symbol=${symbol}&interval=${tf.i}&limit=${tf.limit}`);
-          if (!res.ok) throw new Error(`Lỗi lấy dữ liệu khung ${tf.label}: HTTP ${res.status}`);
-          const klines = await res.json();
-          return { tf, analysis: analyzeTF_ICT(klines) };
-        })),
-        fetchDailyOpenNY(symbol)
-      ]);
-    } else {
-      // Phương pháp EMA cần chạy tuần tự: context (H4/H1) -> confirm (H1/M15) -> trigger (M15/M5),
-      // vì mỗi tầng cần biết bias/kết quả của tầng trước đó. Dữ liệu nến vẫn tải song song trước.
-      const klinesArr = await Promise.all(tfs.map(async tf => {
-        const res = await fetchWithFallback(`/api/v3/klines?symbol=${symbol}&interval=${tf.i}&limit=${tf.limit}`);
-        if (!res.ok) throw new Error(`Lỗi lấy dữ liệu khung ${tf.label}: HTTP ${res.status}`);
-        return res.json();
-      }));
-      const roles = ['context','confirm','trigger'];
-      results = [];
-      for (let idx=0; idx<tfs.length; idx++){
-        const prevAnalysis = idx>0 ? results[idx-1].analysis : null;
-        const analysis = analyzeTF_EMA(klinesArr[idx], roles[idx], prevAnalysis);
-        results.push({ tf: tfs[idx], analysis });
-      }
+    const klinesArr = [];
+    for (const tf of tfs){
+      const res = await fetchWithFallback(`/api/v3/klines?symbol=${symbol}&interval=${tf.i}&limit=${tf.limit}`);
+      if (!res.ok) throw new Error(`Không tải được dữ liệu khung ${tf.label}`);
+      const raw = await res.json();
+      const kl = raw.map(k=>[k[0], parseFloat(k[1]), parseFloat(k[2]), parseFloat(k[3]), parseFloat(k[4]), parseFloat(k[5]), k[6]]);
+      klinesArr.push(kl);
     }
 
-    const { confluenceHtml, cardsHtml, verdictText, note, tradeSetup } = currentMethod === 'ict'
-      ? renderICT(results, tfs, dailyOpenInfo)
-      : renderEMA(results, tfs);
+    // Phải chạy tuần tự: context (khung lớn nhất) -> confirm (khung giữa) -> trigger (khung nhỏ nhất)
+    const roles = ['context','confirm','trigger'];
+    let prevAnalysis = null;
+    const results = [];
+    for (let idx=0; idx<3; idx++){
+      const analysis = analyzeTF_EMA(klinesArr[idx], roles[idx], prevAnalysis);
+      results.push({ tf: tfs[idx], analysis, klines: klinesArr[idx] });
+      prevAnalysis = analysis;
+    }
 
-    content.innerHTML = `
-      ${confluenceHtml}
-      ${cardsHtml}
+    lastAnalysis = { symbol, tfs, results };
+    content.innerHTML = renderEMA(results, tfs) + `
       <div class="copy-row">
-        <button id="copyBtn">${copyLabel}</button>
-        <textarea id="copyFallback" rows="14" readonly></textarea>
-      </div>
-    `;
-
-    lastAnalysis = { symbol, tfs, results, verdictText, note, dailyOpenInfo, tradeSetup };
-    lastMethod = currentMethod;
-    document.getElementById('copyBtn').onclick = copyAnalysis;
-
-  } catch(e) {
-    console.error('lookup error', e);
-    content.innerHTML = `<div class="state err">Lỗi khi tải dữ liệu: ${e.message || e}. Nếu lỗi này lặp lại, có thể mạng/trình duyệt đang chặn kết nối tới Binance.</div>`;
+        <button onclick="copyAnalysis()">Copy phân tích EMA/RSI/PA để gửi vào chat</button>
+        <textarea id="copyFallback" readonly rows="8"></textarea>
+      </div>`;
+  }catch(e){
+    content.innerHTML = `<div class="state err">Lỗi: ${e.message==='notfound' ? 'Không tìm thấy cặp giao dịch trên Binance.' : e.message}</div>`;
   }
-}
-
-function buildAnalysisText(){
-  if (lastMethod === 'ict') return buildAnalysisTextICT();
-  return buildAnalysisTextEMA();
 }
 
 async function copyAnalysis(){
-  const text = buildAnalysisText();
-  const fallback = document.getElementById('copyFallback');
+  const text = buildAnalysisTextEMA();
   try{
     await navigator.clipboard.writeText(text);
-    const btn = document.getElementById('copyBtn');
-    const orig = btn.textContent;
-    btn.textContent = "Đã copy!";
-    setTimeout(()=>{ btn.textContent = orig; }, 1500);
+    alert('Đã copy vào clipboard!');
   }catch(e){
-    fallback.style.display = "block";
-    fallback.value = text;
-    fallback.select();
+    const ta = document.getElementById('copyFallback');
+    ta.style.display = 'block';
+    ta.value = text;
+    ta.select();
   }
 }
 
-document.getElementById('goBtn').onclick = () => lookup();
-input.addEventListener('keydown', (e) => { if (e.key === 'Enter') lookup(); });
+document.getElementById('goBtn').onclick = () => lookup(input.value);
+input.addEventListener('keydown', e => { if (e.key==='Enter') lookup(input.value); });
 </script>
 </body>
 </html>
